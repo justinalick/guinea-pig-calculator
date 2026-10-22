@@ -21,7 +21,8 @@ the Brand Assets and must not present your version as made or endorsed by
 Justin Alick. Attribution in the form "Based on work by Justin Alick" is
 welcome.
 
-Third-party libraries (KaTeX, Plotly) and fonts (IBM Plex, Silkscreen) are
-loaded from public CDNs at runtime and remain under their own licenses.
+Third-party libraries (KaTeX, MIT; Plotly, MIT) and fonts (IBM Plex and
+Silkscreen, SIL OFL 1.1) are vendored in vendor/ and remain under their own
+licenses, included alongside them.
 Cited research (Mata, PeerJ 2025; Rowlands 1949; Ralls, Ballou & Templeton
 1988; PMC10000240) belongs to its respective authors.

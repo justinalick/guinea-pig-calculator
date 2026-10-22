@@ -4,9 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Guinea Pig Herd Planner, @justinalick</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
 <style>
   /* @justinalick brand kit v28. Night is the default theme; Paper is the light theme.
      Chart roles: --accent = "actual" (main series), --accent2 = "model" (comparison); --signal = the LED. */
@@ -234,8 +232,8 @@
   .source.repo { margin-top: 6px; padding-top: 0; border-top: 0; }
   .source a { color: inherit; text-underline-offset: 2px; }
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<script src="vendor/katex/katex.min.js"></script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="pigshape" viewBox="0 0 120 84">
@@ -1630,7 +1628,7 @@ function lexNote() {
 }
 
 // ---- Lexis surface in 3D (Plotly, loaded the first time it's needed) ----
-const PLOTLY_URL = "https://cdn.jsdelivr.net/npm/plotly.js-gl3d-dist-min@2.35.2/plotly-gl3d.min.js";
+const PLOTLY_URL = "vendor/plotly/plotly-gl3d.min.js";
 let lexMode = "3d", plotlyLoading = null;
 function loadPlotly() {
   if (window.Plotly) return Promise.resolve();
