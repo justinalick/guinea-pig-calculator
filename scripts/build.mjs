@@ -33,6 +33,8 @@ const csp = [
   "form-action 'self'",
 ].join("; ");
 
+// no-transform stops Cloudflare injecting its Web Analytics beacon into the
+// HTML, whatever the dashboard setting is.
 writeFileSync("dist/_headers", `${BASE}/*
   Content-Security-Policy: ${csp}
   X-Content-Type-Options: nosniff
@@ -40,6 +42,7 @@ writeFileSync("dist/_headers", `${BASE}/*
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   X-Frame-Options: DENY
   X-Robots-Tag: noindex
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
 
 ${BASE}/vendor/*
   Cache-Control: public, max-age=86400
