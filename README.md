@@ -28,7 +28,7 @@ By [@justinalick](https://x.com/justinalick).
 
 ## Deploy
 
-Every push to `main` runs `scripts/build.mjs` (copies the page into `dist/` and writes a CSP that allows the inline scripts by hash) and `wrangler deploy` to a static-assets Worker routed on that path. It needs the repo secret `CLOUDFLARE_API_TOKEN`.
+`scripts/build.mjs` copies the page into `dist/` and writes a CSP that allows the inline scripts by hash; `wrangler deploy` then publishes it to a static-assets Worker routed on that path. This repo only builds in CI. Deploys run from the site's private repository, so no Cloudflare token is stored here.
 
 ## License
 
