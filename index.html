@@ -1,0 +1,2227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guinea Pig Herd Planner, @justinalick</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Silkscreen&display=swap" rel="stylesheet">
+<style>
+  /* @justinalick brand kit v28. Night is the default theme; Paper is the light theme.
+     Chart roles: --accent = "actual" (main series), --accent2 = "model" (comparison); --signal = the LED. */
+  :root {
+    --bg: #212e38; --ledger: #2a3945; --ink: #f7f3ec; --muted: #b8c6ce; --faint: #8a9ba5; --line: #2d3c47; --axis: #3d4e5a;
+    --accent: #dbb180; --accent2: #6ca6d4; --ref: #c08a4a; --headline: #dbb180; --signal: #6b92ff;
+    --hay: #dbb180; --input: #212e38; --ok: #6ca6d4; --bad: #c08a4a;
+    --rod: #595959; --led: #0044ff; --frame: #000000;
+    --display: "IBM Plex Sans", system-ui, sans-serif;
+    --ui: "IBM Plex Sans", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+    --pixel: Silkscreen, "IBM Plex Mono", monospace;
+  }
+  :root[data-theme="paper"] {
+    --bg: #f3eee6; --ledger: #ffffff; --ink: #111111; --muted: #4f5e66; --faint: #8a949a; --line: #e3dcd0; --axis: #cfc6b8;
+    --accent: #111111; --accent2: #3f6273; --ref: #8a5a22; --headline: #8a5a22; --signal: #0044ff;
+    --hay: #8a5a22; --input: #ffffff; --ok: #3f6273; --bad: #8a5a22;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--ui); font-variant-numeric: tabular-nums; }
+  main { max-width: 1180px; margin: 0 auto; padding: 22px 16px 64px; }
+  :focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; border-radius: 3px; }
+  [hidden] { display: none !important; }
+
+  /* ---- Top and headline answer ---- */
+  .top { display: flex; align-items: center; gap: 12px; }
+  .top h1 { font: 600 17px/1.2 var(--display); margin: 0; letter-spacing: 0; }
+  .top .tag { color: var(--muted); font-size: 13.5px; margin: 2px 0 0; }
+  .pig { flex: none; width: 74px; height: auto; }
+  .pig.small { width: 50px; }
+  @media (max-width: 959px) { .top .pig { display: none; } .hero { margin-top: 14px; } }
+  .bob { animation: bob 2.6s ease-in-out infinite; transform-origin: 50% 90%; }
+  @keyframes bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-3px) } }
+  @media (prefers-reduced-motion: reduce) { .bob { animation: none; } }
+  .hero { margin: 26px 0 30px; display: grid; grid-template-columns: 1fr; gap: 6px 28px; align-items: center; }
+  .hero > p { grid-column: 1; }
+  .family { width: 100%; max-width: 300px; height: auto; color: var(--ink); }
+  @media (min-width: 960px) {
+    .hero { grid-template-columns: minmax(0, 1fr) 300px; }
+    .family { grid-column: 2; grid-row: 1 / span 3; }
+  }
+  .empty-art { display: flex; gap: 2px; align-items: flex-end; }
+  .empty-art svg { height: auto; }
+  .munch { display: flex; align-items: flex-end; gap: 10px; margin-top: 26px; }
+  .munch svg { width: 64px; height: auto; flex: none; color: var(--ink); }
+  .munch .checks { margin-top: 0; }
+  .answer { font: 600 clamp(30px, 5.2vw, 56px)/1.12 var(--display); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+  .answer .inl {
+    font: inherit; letter-spacing: inherit; color: inherit; background: color-mix(in srgb, var(--hay) 35%, transparent);
+    border: 0; border-bottom: 4px solid var(--hay); border-radius: 6px 6px 0 0; padding: 0 0.12em; margin: 0 0.04em;
+    width: 3ch; text-align: center; -moz-appearance: textfield; appearance: textfield;
+  }
+  .answer .inl::-webkit-outer-spin-button, .answer .inl::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .answer .inl:focus { outline: none; background: color-mix(in srgb, var(--hay) 60%, transparent); }
+  .answer-sub { font-size: 16px; color: var(--muted); margin: 14px 0 0; max-width: 72ch; }
+  .warn { color: var(--accent2); font-size: 14px; margin: 10px 0 0; max-width: 80ch; }
+
+  /* ---- Work area: assumptions ledger + results ---- */
+  .work { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+  @media (min-width: 960px) { .work { grid-template-columns: 330px minmax(0, 1fr); } }
+  .ledger { background: var(--ledger); border-radius: 14px; padding: 16px 16px 10px; }
+  @media (min-width: 960px) { .ledger { position: sticky; top: 14px; max-height: calc(100vh - 28px); overflow: auto; } }
+  .ledger-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+  .ledger-head h2 { font: 600 18px var(--display); margin: 0; }
+  .grp { border-top: 1.5px solid var(--ink); margin-top: 12px; }
+  .grp > summary { font: 600 14.5px var(--display); padding: 9px 0 5px; cursor: pointer; list-style: none; display: flex; justify-content: space-between; }
+  .grp > summary::-webkit-details-marker { display: none; }
+  .grp > summary::after { content: "–"; color: var(--muted); font-family: var(--ui); }
+  .grp:not([open]) > summary::after { content: "+"; }
+  .row { display: grid; grid-template-columns: 1fr 92px; align-items: center; gap: 10px; padding: 7px 0;
+    border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .row:last-child { border-bottom: 0; }
+  .row small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; margin-top: 1px; }
+  input, select { width: 100%; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line);
+    background: var(--input); color: var(--ink); font: inherit; font-size: 14px; text-align: right; }
+  select { text-align: left; padding-right: 4px; }
+  input:disabled { opacity: 0.45; }
+  .btn { padding: 8px 15px; border-radius: 999px; border: 1.5px solid var(--accent); background: var(--accent);
+    color: var(--bg); font: 600 13.5px var(--ui); cursor: pointer; white-space: nowrap; }
+  .btn.ghost { background: transparent; color: var(--accent); padding: 5px 11px; font-size: 12.5px; }
+  .btn:disabled { opacity: 0.55; cursor: default; }
+
+  /* ---- Tabs ---- */
+  .tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1.5px solid var(--line); margin-bottom: 18px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs [role=tab] { background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1.5px; padding: 9px 12px 8px;
+    font: 500 14.5px var(--ui); color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .tabs [role=tab][aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  .tabpanel h2 { font: 600 22px/1.25 var(--display); margin: 0 0 4px; letter-spacing: -0.01em; }
+  .tabpanel h3 { font: 600 15px/1.3 var(--display); margin: 0 0 6px; }
+  .lede { color: var(--muted); margin: 0 0 14px; max-width: 76ch; font-size: 14px; }
+  .bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+  .ctl { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 13.5px; }
+  .ctl label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .ctl input { width: 84px; }
+
+  /* ---- Figures ---- */
+  .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 22px; margin: 4px 0 22px; }
+  @media (min-width: 640px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (min-width: 640px) { .stats.five { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+  .stat { border-top: 2px solid var(--ink); padding-top: 7px; min-width: 0; }
+  .stat .v { font: 600 26px/1.15 var(--display); letter-spacing: -0.01em; overflow-wrap: anywhere; }
+  .stat .k { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .stat.lead .v { color: var(--accent); }
+  canvas { width: 100%; height: 260px; display: block; }
+  #chart { height: 300px; }
+  #hist { height: 250px; margin-top: 6px; }
+  #tornado { height: 330px; }
+  #mortchart { height: 300px; }
+  #cFounders { height: 290px; }
+  .pyr { margin-top: 18px; }
+  .chart.pyr canvas { height: 380px; margin-top: 6px; }
+  .pyr input[type=range] { padding: 0; accent-color: var(--accent); }
+  .lexis { margin-top: 30px; }
+  .chart.lexis canvas { height: 300px; margin-top: 6px; }
+  .seg { display: inline-flex; border: 1.5px solid var(--accent); border-radius: 999px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--accent); border: 0; padding: 5px 14px; font: 600 12.5px var(--ui); cursor: pointer; }
+  .seg button[aria-pressed=true] { background: var(--accent); color: var(--bg); }
+  .lex3d { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 6px; }
+  @media (min-width: 900px) { .lex3d { grid-template-columns: 1fr 1fr; } }
+  .surf { height: 380px; min-width: 0; position: relative; }
+  .surf .msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+  @media (max-width: 700px) { .chart.lexis canvas { height: 520px; } }
+  .charts { display: grid; grid-template-columns: 1fr; gap: 30px 32px; margin-top: 20px; }
+  @media (min-width: 1100px) { .charts { grid-template-columns: 1fr 1fr; } }
+  .chart { min-width: 0; }
+  .chart canvas { height: 230px; }
+  .legend { display: flex; gap: 6px 16px; font-size: 12px; color: var(--muted); margin-top: 8px; flex-wrap: wrap; }
+  .sw { display: inline-block; width: 12px; height: 10px; margin-right: 5px; vertical-align: -1px; border-radius: 2px; }
+  .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; max-width: 80ch; }
+  .chart .note { font-size: 12.5px; }
+  .mcempty { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; margin-top: 18px; }
+  details.more { margin-top: 16px; }
+  details.more > summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13.5px; }
+  .tablewrap { max-height: 320px; overflow: auto; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--bg); }
+  th:first-child, td:first-child { text-align: left; }
+  tr.hit td { color: var(--accent); font-weight: 600; }
+  .checks { font-size: 12.5px; margin-top: 18px; }
+  .checks summary { cursor: pointer; color: var(--muted); }
+  .checks .pass { color: var(--ok); font-weight: 600; }
+  .checks .fail { color: var(--bad); font-weight: 600; }
+  .checks li { color: var(--muted); }
+
+  /* ---- Model diagram ---- */
+  .flow { display: block; width: 100%; max-width: 520px; height: auto; margin: 6px 0 0; }
+  .flow .node { fill: var(--input); stroke: var(--line); stroke-width: 1.2; }
+  .flow .node.key { stroke: var(--accent); stroke-width: 1.8; }
+  .flow .node.death { stroke-dasharray: 4 3; }
+  .flow .t { fill: var(--ink); font: 600 12.5px var(--display); text-anchor: middle; }
+  .flow .s { fill: var(--muted); font: 10.5px var(--ui); text-anchor: middle; }
+  .flow .s.l { text-anchor: start; }
+  .flow .la { stroke: var(--accent); stroke-width: 1.6; }
+  .flow .lb { stroke: var(--accent2); stroke-width: 1.4; stroke-dasharray: 5 4; }
+  .flow .lc { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; }
+  .flow .fa { fill: var(--accent); } .flow .fb { fill: var(--accent2); } .flow .fc { fill: var(--muted); }
+  .how { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; }
+
+  /* ---- Math ---- */
+  .math h3 { margin-top: 26px; }
+  .math p, .math li { font-size: 14px; color: var(--muted); max-width: 78ch; }
+  .math ul { margin: 6px 0 0 18px; padding: 0; }
+  .eq { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+  .katex { color: var(--ink); font-size: 1.05em; }
+  .live { border-left: 3px solid var(--hay); padding-left: 14px; }
+  .lt { overflow-x: auto; }
+  .lt table { font-size: 12px; }
+  .lt th, .lt td { text-align: center; padding: 4px 5px; position: static; }
+
+  /* ================= @justinalick brand layer ================= */
+  /* Square corners everywhere: pixel art has no rounded corners. */
+  *, *::before, *::after { border-radius: 0 !important; }
+  .flow rect { rx: 0; ry: 0; }
+  body { background: var(--bg); }
+  /* The 4px frame around the whole piece, on the 24px grid. */
+  main { border: 4px solid var(--frame); margin: 24px auto; padding: 24px 24px 24px; max-width: 1200px; background: var(--bg); }
+  @media (max-width: 700px) { main { margin: 0; border-width: 4px; padding: 24px 12px; } }
+  /* Header: kicker, title, vape bar left; byline top-right. */
+  .top { justify-content: space-between; align-items: flex-start; }
+  .top .who { display: flex; align-items: center; gap: 12px; }
+  .kicker { font: 400 12px/1 var(--pixel); text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 6px; }
+  .top h1 { font: 600 18px/1.2 var(--display); }
+  .byline { display: flex; align-items: center; gap: 12px; }
+  .handle { font: 600 14px/1 var(--mono); color: var(--ink); text-decoration: none; }
+  /* The punk: whole-number scaling with nearest-neighbour only (24px source x 6 = 144px), on its own slate. */
+  .byline { flex-wrap: wrap; justify-content: flex-end; }
+  .punk { width: 144px; height: 144px; image-rendering: pixelated; image-rendering: crisp-edges; display: block; flex: none; }
+  @media (max-width: 700px) { .punk { width: 96px; height: 96px; } }   /* 4x, the brand minimum */
+  .theme { background: transparent; border: 1.5px solid var(--axis); color: var(--muted); font: 500 12px var(--mono); padding: 5px 10px; cursor: pointer; }
+  /* Headline: the number takes accent; the vape bar runs the full title width with the LED on its last 8px. */
+  .answer { font-family: var(--display); font-weight: 600; letter-spacing: -0.015em; width: fit-content; max-width: 100%; }
+  .answer .hl { color: var(--headline); }
+  .vape { display: block; height: 8px; width: 100%; margin: 16px 0 0; background: linear-gradient(90deg, var(--rod) calc(100% - 8px), var(--led) calc(100% - 8px)); }
+  .answer .inl { background: var(--ledger); border: 0; border-bottom: 4px solid var(--headline); color: var(--ink); }
+  .answer .inl:focus { background: var(--ledger); outline: 2px solid var(--signal); outline-offset: 2px; }
+  .answer-sub { color: var(--muted); }
+  .warn { color: var(--ref); }
+  /* Data in Plex Mono: figures, ticks, tables, inputs, legends, sources. */
+  .titlewrap { grid-column: 1; width: fit-content; max-width: 100%; }
+  .stat .v { font-family: var(--display); }
+  .stat.lead .v { color: var(--headline); }
+  .stat .k, .legend, table, .row input, .row select, .ctl input, .checks, .source { font-family: var(--mono); }
+  .stat { border-top: 2px solid var(--axis); }
+  .stat.lead { border-top-color: var(--ink); }
+  .ledger { border: 1.5px solid var(--axis); }
+  .grp { border-top: 1.5px solid var(--axis); }
+  .row { border-bottom: 1px solid var(--line); }
+  input, select { border: 1px solid var(--axis); }
+  .tabs { border-bottom: 1.5px solid var(--axis); }
+  .tabs [role=tab][aria-selected=true] { border-bottom-color: var(--headline); }
+  .btn { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--ink); }
+  .seg { border-color: var(--ink); }
+  .seg button { color: var(--ink); }
+  .seg button[aria-pressed=true] { background: var(--ink); color: var(--bg); }
+  .live { border-left: 4px solid var(--ink); background: var(--ledger); padding: 12px 16px; }
+  .flow .node.key { stroke: var(--ink); stroke-width: 2.5; }
+  details.more > summary { color: var(--ink); }
+  :focus-visible { outline-color: var(--signal); }
+  /* Footer: one mono source line, bottom-left. */
+  .source { font-size: 12px; color: var(--muted); margin: 36px 0 0; padding-top: 12px; border-top: 1px solid var(--axis); }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="pigshape" viewBox="0 0 120 84">
+  <ellipse cx="62" cy="76" rx="44" ry="5" fill="currentColor" opacity="0.08"/>
+  <path d="M18 52 C14 30 36 16 60 16 C88 16 108 30 106 52 C104 70 86 76 62 76 C38 76 20 70 18 52 Z" fill="#e9b07a"/>
+  <path d="M60 16 C78 15 96 24 104 40 C92 38 80 30 72 18 Z" fill="#fbf3e6"/>
+  <path d="M86 70 C96 64 104 56 106 46 C107 60 100 70 86 74 Z" fill="#8a5a36"/>
+  <path d="M18 52 C16 36 26 24 42 22 C50 30 52 46 46 62 C36 66 24 62 18 52 Z" fill="#8a5a36"/>
+  <ellipse cx="40" cy="22" rx="8" ry="6" fill="#c97f5a" transform="rotate(-25 40 22)"/>
+  <ellipse cx="40" cy="22" rx="4.5" ry="3" fill="#f2b8a8" transform="rotate(-25 40 22)"/>
+  <circle cx="30" cy="40" r="5" fill="#1d1612"/>
+  <circle cx="31.8" cy="38.2" r="1.6" fill="#fff"/>
+  <ellipse cx="27" cy="52" rx="5" ry="3" fill="#f29b8f" opacity="0.6"/>
+  <ellipse cx="17.5" cy="47" rx="2.6" ry="2" fill="#d9776c"/>
+  <path d="M17 50 Q18.5 54 22 53" stroke="#5a3a26" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <path d="M16 46 L4 42 M16 48 L3 49 M17 50 L6 55" stroke="#5a3a26" stroke-width="0.9" stroke-linecap="round" opacity="0.6"/>
+  <ellipse cx="34" cy="75" rx="6" ry="3" fill="#f2b8a8"/>
+  <ellipse cx="80" cy="75" rx="6" ry="3" fill="#f2b8a8"/>
+</symbol>
+<!-- White coat with ginger patches -->
+<symbol id="pig2" viewBox="0 0 120 84">
+  <ellipse cx="62" cy="76" rx="44" ry="5" fill="currentColor" opacity="0.08"/>
+  <path d="M18 52 C14 30 36 16 60 16 C88 16 108 30 106 52 C104 70 86 76 62 76 C38 76 20 70 18 52 Z" fill="#fbf6ee"/>
+  <path d="M66 17 C84 18 100 28 105 44 C96 48 84 44 76 34 C70 28 66 22 66 17 Z" fill="#df8f44"/>
+  <path d="M78 74 C92 70 102 62 106 50 C108 64 98 74 84 76 Z" fill="#df8f44"/>
+  <path d="M20 50 C18 38 26 27 38 24 C44 32 44 44 38 56 C30 60 23 57 20 50 Z" fill="#df8f44"/>
+  <ellipse cx="40" cy="22" rx="8" ry="6" fill="#e9a37a" transform="rotate(-25 40 22)"/>
+  <ellipse cx="40" cy="22" rx="4.5" ry="3" fill="#f6c3b4" transform="rotate(-25 40 22)"/>
+  <circle cx="30" cy="40" r="5" fill="#1d1612"/>
+  <circle cx="31.8" cy="38.2" r="1.6" fill="#fff"/>
+  <ellipse cx="27" cy="52" rx="5" ry="3" fill="#f29b8f" opacity="0.7"/>
+  <ellipse cx="17.5" cy="47" rx="2.6" ry="2" fill="#d9776c"/>
+  <path d="M17 50 Q18.5 54 22 53" stroke="#5a3a26" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <path d="M16 46 L4 42 M16 48 L3 49 M17 50 L6 55" stroke="#5a3a26" stroke-width="0.9" stroke-linecap="round" opacity="0.5"/>
+  <ellipse cx="34" cy="75" rx="6" ry="3" fill="#f6c3b4"/>
+  <ellipse cx="80" cy="75" rx="6" ry="3" fill="#f6c3b4"/>
+</symbol>
+<!-- Dark coat with a white blaze -->
+<symbol id="pig3" viewBox="0 0 120 84">
+  <ellipse cx="62" cy="76" rx="44" ry="5" fill="currentColor" opacity="0.08"/>
+  <path d="M18 52 C14 30 36 16 60 16 C88 16 108 30 106 52 C104 70 86 76 62 76 C38 76 20 70 18 52 Z" fill="#5b4033"/>
+  <path d="M46 18 C56 15 64 16 70 18 C66 30 66 52 72 74 C64 76 56 76 50 75 C46 56 44 34 46 18 Z" fill="#f4ede2"/>
+  <path d="M18 52 C16 40 22 30 30 26 C34 36 32 48 26 58 C22 57 19 55 18 52 Z" fill="#3e2b22"/>
+  <ellipse cx="40" cy="22" rx="8" ry="6" fill="#7a5442" transform="rotate(-25 40 22)"/>
+  <ellipse cx="40" cy="22" rx="4.5" ry="3" fill="#d79c8a" transform="rotate(-25 40 22)"/>
+  <circle cx="30" cy="40" r="5" fill="#120c09"/>
+  <circle cx="31.8" cy="38.2" r="1.6" fill="#fff"/>
+  <ellipse cx="17.5" cy="47" rx="2.6" ry="2" fill="#c06a62"/>
+  <path d="M17 50 Q18.5 54 22 53" stroke="#2a1c15" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <path d="M16 46 L4 42 M16 48 L3 49 M17 50 L6 55" stroke="#2a1c15" stroke-width="0.9" stroke-linecap="round" opacity="0.6"/>
+  <ellipse cx="34" cy="75" rx="6" ry="3" fill="#d79c8a"/>
+  <ellipse cx="80" cy="75" rx="6" ry="3" fill="#d79c8a"/>
+</symbol>
+<!-- Asleep: closed eyes and a few z's -->
+<symbol id="pigsleep" viewBox="0 0 140 84">
+  <ellipse cx="66" cy="76" rx="46" ry="5" fill="currentColor" opacity="0.08"/>
+  <path d="M18 58 C16 40 36 26 62 26 C90 26 110 38 108 56 C106 72 88 77 64 77 C40 77 20 72 18 58 Z" fill="#e9b07a"/>
+  <path d="M64 26 C82 26 98 33 106 46 C94 45 82 38 74 28 Z" fill="#fbf3e6"/>
+  <path d="M18 58 C17 46 25 36 40 33 C47 41 48 53 43 66 C33 69 22 66 18 58 Z" fill="#8a5a36"/>
+  <ellipse cx="40" cy="31" rx="8" ry="5.5" fill="#c97f5a" transform="rotate(-20 40 31)"/>
+  <path d="M25 49 Q30 53 35 49" stroke="#1d1612" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <ellipse cx="27" cy="59" rx="5" ry="3" fill="#f29b8f" opacity="0.6"/>
+  <ellipse cx="17.5" cy="55" rx="2.6" ry="2" fill="#d9776c"/>
+  <text x="104" y="22" font-family="Georgia, serif" font-size="15" font-weight="700" fill="currentColor" opacity="0.5">z</text>
+  <text x="116" y="12" font-family="Georgia, serif" font-size="11" font-weight="700" fill="currentColor" opacity="0.35">z</text>
+  <text x="125" y="5" font-family="Georgia, serif" font-size="8" font-weight="700" fill="currentColor" opacity="0.25">z</text>
+</symbol>
+<!-- Munching a strand of hay -->
+<symbol id="pigmunch" viewBox="0 0 120 84">
+  <use href="#pig2"/>
+  <path d="M15 51 L-2 60 M16 52 L0 66 M17 52 L4 70" stroke="#c9a23c" stroke-width="2" stroke-linecap="round"/>
+  <path d="M14 51 L-3 55" stroke="#9c7d24" stroke-width="1.6" stroke-linecap="round"/>
+</symbol>
+</svg>
+<main>
+  <header class="top">
+    <div class="who">
+      <svg class="pig bob" viewBox="0 0 120 84" role="img" aria-label="A cartoon guinea pig"><use href="#pigshape"/></svg>
+      <div>
+        <p class="kicker">Herd model</p>
+        <h1>Guinea pig herd planner</h1>
+        <p class="tag">How long a herd takes to grow, with no selling or neutering.</p>
+      </div>
+    </div>
+    <div class="byline">
+      <button class="theme" id="themeBtn" aria-label="Switch to the paper theme">Paper</button>
+      <span class="handle">@justinalick</span>
+      <img class="punk" alt="@justinalick's CryptoPunk" width="24" height="24"
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAA6klEQVR4nK2UvQ3CMBCFXxArMII3gAkYIA2N09J5hTRuWCAFXVrS0KSHCaBMlxGyBEXE6eTYPlvyq3y++NP9prre7iihnfhF35oCoL41WusUlhxRooqB9iGHk85qRjrjB/WtmUcLQNV2vfmbJsSqtg6iHNRxmb+OV9XWywrWyEuJKAjKosRAuQp2DcDn/QRwOl+4mRoRVRpA001E2ZoCiIuIXlMG0exkyQV5Z0TVVqTHik2KJ5UE4p1qumk98DWkDOSI6L3Wmt8PywOvKjUisLw2ZRq4IYD44MyjDW2sDHKiyP4fJT7mKra0P9+fVrungBVpAAAAAElFTkSuQmCC">
+    </div>
+  </header>
+
+  <section class="hero" aria-live="polite">
+    <svg class="family" id="family" viewBox="0 0 320 150" role="img" aria-label="A sow with her litter of pups"></svg>
+    <div class="titlewrap">
+      <p class="answer">Starting with <input id="n" class="inl" type="number" min="2" step="1" value="10" aria-label="Starting pigs">
+        guinea pigs, <span id="hVerb">you'd have</span> <input id="N" class="inl" type="number" min="3" step="1" value="10000" aria-label="Target pigs">
+        <span id="hWhen">…</span></p>
+      <span class="vape" aria-hidden="true"></span>
+    </div>
+    <p class="answer-sub" id="hSub"></p>
+    <p id="warn" class="warn"></p>
+  </section>
+
+  <div class="work">
+    <aside class="ledger" aria-label="Assumptions">
+      <div class="ledger-head">
+        <h2>Assumptions</h2>
+        <button class="btn ghost" id="reset" title="Put every assumption back to the realistic values">Reset to realistic</button>
+      </div>
+
+      <details class="grp" open>
+        <summary>Starting herd</summary>
+        <label class="row">Sex split
+          <select id="split">
+            <option value="half">50/50</option>
+            <option value="oneboar">1 boar, rest sows</option>
+          </select>
+        </label>
+        <label class="row"><span>Age when bought (days)<small>Assumed unrelated to each other</small></span><input id="a0" type="number" min="0" value="180"></label>
+      </details>
+
+      <details class="grp" open>
+        <summary>Breeding</summary>
+        <label class="row"><span>Gestation (days)<small>Range 59–73, average 63–68</small></span><input id="g" type="number" min="55" max="80" value="68"></label>
+        <label class="row"><span>Days between litters<small>Equal to gestation if bred right after birth</small></span><input id="I" type="number" min="55" value="120"></label>
+        <label class="row"><span>Litter size, 2nd litter on<small>Average about 3, range 1–8</small></span><input id="L" type="number" min="0" step="0.1" value="3"></label>
+        <label class="row"><span>First litter, × later size<small>About 0.8 in colony data</small></span><input id="rho1" type="number" min="0.1" max="2" step="0.05" value="0.8"></label>
+        <label class="row"><span>Share of pups that are female</span><input id="f" type="number" min="0" max="1" step="0.05" value="0.5"></label>
+        <label class="row"><span>First conception (age, days)<small>Possible from about 28</small></span><input id="M" type="number" min="0" value="82"></label>
+        <label class="row"><span>Sows stop breeding at (days)<small>0 means never</small></span><input id="R" type="number" min="0" value="900"></label>
+      </details>
+
+      <details class="grp" open>
+        <summary>Deaths</summary>
+        <label class="row"><span>Adult mortality<small>By age from UK pet vet records, or one flat rate</small></span>
+          <select id="mort">
+            <option value="life">By age</option>
+            <option value="flat">Flat rate</option>
+          </select>
+        </label>
+        <label class="row"><span>Flat rate per year<small>Used only with the flat rate</small></span><input id="m" type="number" min="0" max="0.99" step="0.01" value="0.1"></label>
+        <label class="row"><span>Extra yearly deaths, breeding sows<small>An assumption; no data found</small></span><input id="hb" type="number" min="0" max="0.99" step="0.01" value="0.05"></label>
+        <label class="row"><span>Pup survival<small>After stillbirths and early deaths; about 0.70 measured</small></span><input id="s" type="number" min="0" max="1" step="0.05" value="0.7"></label>
+        <label class="row"><span>Litters lost entirely<small>About 0.10; counted within pup survival</small></span><input id="w" type="number" min="0" max="1" step="0.01" value="0.1"></label>
+        <label class="row"><span>Sow death risk per litter</span><input id="d" type="number" min="0" max="1" step="0.01" value="0.05"></label>
+        <label class="row"><span>Older sows' pups survive less<small>×0.61 for sows over 900 days</small></span>
+          <select id="old">
+            <option value="on">Yes</option>
+            <option value="off">No</option>
+          </select>
+        </label>
+      </details>
+
+      <details class="grp" open>
+        <summary>Inbreeding, space and cost</summary>
+        <label class="row"><span>Inbreeding load<small>Lethal equivalents; about 3.1 for mammals; 0 turns it off</small></span><input id="B" type="number" min="0" max="20" step="0.1" value="3.1"></label>
+        <label class="row"><span>Floor area available (m²)<small>Crowding slows breeding; 0 means unlimited</small></span><input id="area" type="number" min="0" step="1" value="0"></label>
+        <label class="row"><span>Floor area per pig (m²)<small>About 0.3 from welfare guidance</small></span><input id="space" type="number" min="0.01" step="0.05" value="0.3"></label>
+        <label class="row"><span>Upkeep per pig per month ($)<small>Food, bedding and vet at pet prices</small></span><input id="cost" type="number" min="0" step="1" value="30"></label>
+      </details>
+    </aside>
+
+    <div class="results">
+      <div class="tabs" role="tablist" aria-label="Results">
+        <button role="tab" id="t-overview" aria-controls="p-overview" aria-selected="true">Overview</button>
+        <button role="tab" id="t-time" aria-controls="p-time" aria-selected="false" tabindex="-1">Over time</button>
+        <button role="tab" id="t-luck" aria-controls="p-luck" aria-selected="false" tabindex="-1">Luck</button>
+        <button role="tab" id="t-founders" aria-controls="p-founders" aria-selected="false" tabindex="-1">Founders</button>
+        <button role="tab" id="t-mort" aria-controls="p-mort" aria-selected="false" tabindex="-1">Mortality</button>
+        <button role="tab" id="t-sens" aria-controls="p-sens" aria-selected="false" tabindex="-1">Sensitivity</button>
+        <button role="tab" id="t-how" aria-controls="p-how" aria-selected="false" tabindex="-1">How it works</button>
+      </div>
+
+      <section class="tabpanel" role="tabpanel" id="p-overview" aria-labelledby="t-overview">
+        <div class="stats">
+          <div class="stat lead"><div class="v" id="kDays">–</div><div class="k">days to reach N (<span id="kMonths">–</span> months)</div></div>
+          <div class="stat"><div class="v" id="kDbl">–</div><div class="k">days for the herd to double</div></div>
+          <div class="stat"><div class="v" id="kR0">–</div><div class="k">daughters per sow over her life</div></div>
+          <div class="stat"><div class="v" id="kArea">–</div><div class="k">floor area at N</div></div>
+          <div class="stat"><div class="v" id="kMonthly">–</div><div class="k">upkeep per month at N</div></div>
+          <div class="stat"><div class="v" id="kTotal">–</div><div class="k">upkeep until N</div></div>
+        </div>
+        <h3>Herd size</h3>
+        <canvas id="chart"></canvas>
+        <p class="note">The average of all the ways the herd could go, on a log scale. Starting pigs are mature and unrelated,
+          and the sows are bred on day 0. Daughters first give birth at age M + gestation, then every interval until they die
+          or stop breeding. Births need a fertile boar, floor space (if limited) and are reduced by inbreeding. The Luck tab
+          shows how far real herds stray from this line.</p>
+        <details class="more"><summary>Show the herd table</summary>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>Day</th><th>Sows</th><th>Boars</th><th>Total</th><th>Inbreeding F</th></tr></thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </details>
+        <div class="munch">
+          <svg viewBox="-6 0 126 84" aria-hidden="true"><use href="#pigmunch"/></svg>
+          <details class="checks" id="checks"><summary>Self-checks: running…</summary><ul id="checklist"></ul></details>
+        </div>
+      </section>
+
+      <section class="tabpanel" role="tabpanel" id="p-time" aria-labelledby="t-time" hidden>
+        <h2>The herd over time</h2>
+        <p class="lede">From the average model. The inbreeding chart adds the Monte Carlo spread once the Luck tab has run.</p>
+        <div class="chart pyr">
+          <div class="bar"><h3>Ages and sexes, day by day</h3>
+            <div class="ctl">
+              <button class="btn ghost" id="pyrPlay" aria-label="Play the animation">Play</button>
+              <input type="range" id="pyrSlider" min="0" max="0" value="0" aria-label="Day shown" style="width:180px">
+            </div>
+          </div>
+          <canvas id="cPyr"></canvas>
+          <div class="legend" id="lPyr"></div>
+          <p class="note" id="nPyr"></p>
+        </div>
+        <div class="chart lexis">
+          <div class="bar"><h3>The whole history at a glance</h3>
+            <div class="seg" role="group" aria-label="View">
+              <button id="lex3dBtn" aria-pressed="true">3D</button><button id="lexFlatBtn" aria-pressed="false">Flat</button>
+            </div>
+          </div>
+          <div id="lex3d" class="lex3d">
+            <div id="lexF3d" class="surf" aria-label="Females: 3D surface of age by time"></div>
+            <div id="lexM3d" class="surf" aria-label="Males: 3D surface of age by time"></div>
+          </div>
+          <canvas id="cLex" hidden></canvas>
+          <div class="legend" id="lLex"></div>
+          <p class="note" id="nLex"></p>
+        </div>
+        <div class="charts">
+          <div class="chart"><h3>Who is in the herd</h3><canvas id="cMix"></canvas><div class="legend" id="lMix"></div>
+            <p class="note" id="nMix"></p></div>
+          <div class="chart"><h3>What the losses are</h3><canvas id="cDeaths"></canvas><div class="legend" id="lDeaths"></div>
+            <p class="note" id="nDeaths"></p></div>
+          <div class="chart"><h3>Inbreeding of newborn pups</h3><canvas id="cInb"></canvas><div class="legend" id="lInb"></div>
+            <p class="note" id="nInb"></p></div>
+          <div class="chart"><h3>Floor space and running cost</h3><canvas id="cCost"></canvas><div class="legend" id="lCost"></div>
+            <p class="note" id="nCost"></p></div>
+        </div>
+      </section>
+
+      <section class="tabpanel" role="tabpanel" id="p-luck" aria-labelledby="t-luck" hidden>
+        <div class="bar">
+          <h2>Luck and uncertain inputs</h2>
+          <div class="ctl">
+            <label>Input uncertainty ±%<input id="u" type="number" min="0" max="90" step="5" value="15"></label>
+            <label>Runs<input id="runs" type="number" min="50" max="1000000" step="1000" value="100000"></label>
+            <button class="btn" id="mcgo">Run</button>
+          </div>
+        </div>
+        <p class="lede">Simulates every pig one by one, many times over. <b>Luck only</b> uses your assumptions exactly;
+          <b>luck plus input uncertainty</b> also redraws litter size, first-litter size, pup survival, lost litters, the
+          interval between litters, sow risks, mortality and inbreeding load in each run, each within ±u%. Runs are split
+          between the two, spread over your processor cores and shown as they finish; Stop keeps what has finished.
+          100,000 runs to 10,000 pigs take a few minutes.</p>
+        <div id="mcempty" class="mcempty">
+          <svg class="pig" viewBox="0 0 140 84" aria-hidden="true" style="width:92px;color:var(--ink)"><use href="#pigsleep"/></svg>
+          <span id="mcmsg">Press Run to wake the simulation. A few thousand runs already give stable results.</span>
+        </div>
+        <div id="mcout" hidden>
+          <div class="stats five">
+            <div class="stat lead"><div class="v" id="sMed">–</div><div class="k">median days</div></div>
+            <div class="stat"><div class="v" id="sP10">–</div><div class="k">fastest 10% by</div></div>
+            <div class="stat"><div class="v" id="sP90">–</div><div class="k">90% done by</div></div>
+            <div class="stat"><div class="v" id="sMean">–</div><div class="k">mean days</div></div>
+            <div class="stat"><div class="v" id="sExt">–</div><div class="k">never reach N</div></div>
+          </div>
+          <h3>How long it takes, run by run</h3>
+          <canvas id="hist"></canvas>
+          <div class="legend" id="histlegend"></div>
+          <p class="note" id="mcnote"></p>
+          <div class="charts">
+            <div class="chart"><h3>Chance of reaching N by each date</h3><canvas id="cCdf"></canvas><div class="legend" id="lCdf"></div>
+              <p class="note" id="nCdf"></p></div>
+            <div class="chart"><h3>Herd size over time</h3><canvas id="cFan"></canvas><div class="legend" id="lFan"></div>
+              <p class="note" id="nFan"></p></div>
+            <div class="chart"><h3>Have the results settled?</h3><canvas id="cConv"></canvas><div class="legend" id="lConv"></div>
+              <p class="note" id="nConv"></p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tabpanel" role="tabpanel" id="p-founders" aria-labelledby="t-founders" hidden>
+        <div class="bar">
+          <h2>How many pigs to start with</h2>
+          <div class="ctl">
+            <label>Runs per herd size<input id="fdruns" type="number" min="20" max="20000" step="100" value="500"></label>
+            <button class="btn" id="fdgo">Run</button>
+          </div>
+        </div>
+        <p class="lede">Repeats the luck-only simulation for starting herds of 2 to 40 unrelated pigs, with the sex split set
+          in your assumptions, and plots the days to reach N and the share of runs that never get there.</p>
+        <div class="mcempty" id="fdempty">
+          <div class="empty-art" aria-hidden="true" style="color:var(--ink)">
+            <svg viewBox="0 0 120 84" style="width:58px"><use href="#pigshape"/></svg>
+            <svg viewBox="0 0 120 84" style="width:50px"><use href="#pig2"/></svg>
+            <svg viewBox="0 0 120 84" style="width:54px"><use href="#pig3"/></svg>
+            <svg viewBox="0 0 120 84" style="width:44px"><use href="#pig2"/></svg>
+          </div>
+          <span>How big should the founding group be?</span>
+        </div>
+        <canvas id="cFounders"></canvas>
+        <div class="legend" id="lFounders"></div>
+        <p class="note" id="fdnote">Press Run. With 500 runs per size this takes about a minute on a typical laptop for 10,000 pigs.</p>
+      </section>
+
+      <section class="tabpanel" role="tabpanel" id="p-mort" aria-labelledby="t-mort" hidden>
+        <h2>Deaths by age: published study vs simulated herds</h2>
+        <p class="lede">Share dying in each half-year of age. Dots are the published study of UK pet guinea pigs (Mata,
+          PeerJ 2025); the dashed line is the table the model uses; the solid line and shaded band are what pigs in the
+          luck-only runs actually experienced (all pigs pooled, and the middle 80% of runs).</p>
+        <canvas id="mortchart"></canvas>
+        <div class="legend" id="mortlegend"></div>
+        <p class="note" id="mortnote"></p>
+      </section>
+
+      <section class="tabpanel" role="tabpanel" id="p-sens" aria-labelledby="t-sens" hidden>
+        <h2>Which assumption matters most</h2>
+        <p class="lede">Days to reach N when each assumption is moved 10% down or up, with everything else held fixed.
+          The longer the bar, the more the answer depends on getting that assumption right.</p>
+        <canvas id="tornado"></canvas>
+        <div class="legend"><span><span class="sw" style="background:var(--accent2)"></span>assumption 10% lower</span><span><span class="sw" style="background:var(--accent)"></span>assumption 10% higher</span></div>
+      </section>
+
+      <section class="tabpanel" role="tabpanel" id="p-how" aria-labelledby="t-how" hidden>
+        <h2>How the model works</h2>
+        <p class="lede">One trip around the loop is a generation: a sow's daughters grow up and become breeding sows
+          themselves. Every arrow can lose pigs, and the numbers follow your assumptions.</p>
+        <div class="how">
+          <svg class="flow" viewBox="0 0 360 430" role="img" aria-label="Diagram of the birth-and-death model">
+            <defs>
+              <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="fa"/></marker>
+              <marker id="arB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="fb"/></marker>
+              <marker id="arC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="fc"/></marker>
+            </defs>
+            <rect class="node key" x="80" y="8" width="200" height="50" rx="10"/>
+            <text class="t" x="180" y="29">Breeding sow</text>
+            <text class="s" x="180" y="46" id="dBS">litter every 120 d, ages 150–900 d</text>
+            <line class="la" x1="180" y1="58" x2="180" y2="98" marker-end="url(#arA)"/>
+            <text class="s l" x="188" y="74">needs a fertile boar (β)</text>
+            <text class="s l" x="188" y="87">and floor space (δ)</text>
+            <rect class="node" x="80" y="100" width="200" height="50" rx="10"/>
+            <text class="t" x="180" y="121">Litter</text>
+            <text class="s" x="180" y="138" id="dLT">3 pups (first litter ×0.8)</text>
+            <line class="la" x1="180" y1="150" x2="180" y2="190" marker-end="url(#arA)"/>
+            <text class="s l" x="188" y="166">losses: s, whole litter w,</text>
+            <text class="s l" x="188" y="179">old sow φ, inbreeding</text>
+            <rect class="node" x="80" y="192" width="200" height="50" rx="10"/>
+            <text class="t" x="180" y="213">Pups that live</text>
+            <text class="s" x="180" y="230" id="dPS">pup survival 0.70</text>
+            <line class="la" x1="140" y1="242" x2="95" y2="282" marker-end="url(#arA)"/>
+            <line class="la" x1="220" y1="242" x2="265" y2="282" marker-end="url(#arA)"/>
+            <text class="s" x="84" y="262" id="dF">♀ 50%</text>
+            <text class="s" x="278" y="262" id="dMm">♂ 50%</text>
+            <rect class="node" x="10" y="284" width="150" height="50" rx="10"/>
+            <text class="t" x="85" y="305">Young sow</text>
+            <text class="s" x="85" y="322" id="dYS">grows to 82 d</text>
+            <rect class="node" x="200" y="284" width="150" height="50" rx="10"/>
+            <text class="t" x="275" y="305">Young boar</text>
+            <text class="s" x="275" y="322">fertile from 70 d</text>
+            <path class="la" d="M30 284 V33 H78" fill="none" marker-end="url(#arA)"/>
+            <text class="s" transform="translate(24 160) rotate(-90)">becomes a breeding sow</text>
+            <path class="lb" d="M330 284 V33 H282" fill="none" marker-end="url(#arB)"/>
+            <text class="s" transform="translate(342 160) rotate(90)">fertile boar needed</text>
+            <line class="lc" x1="85" y1="334" x2="85" y2="364" marker-end="url(#arC)"/>
+            <line class="lc" x1="275" y1="334" x2="275" y2="364" marker-end="url(#arC)"/>
+            <rect class="node death" x="10" y="366" width="340" height="58" rx="10"/>
+            <text class="t" x="180" y="384">Deaths at every stage</text>
+            <text class="s" x="180" y="400" id="dDeath1">all pigs: mortality by age</text>
+            <text class="s" x="180" y="414" id="dDeath2">sows: +5%/yr while breeding, 5% per litter</text>
+          </svg>
+          <div class="math">
+            <h3 style="margin-top:0">With your assumptions</h3>
+            <div class="live">
+              <div class="eq" id="m1"></div>
+              <div class="eq" id="m2"></div>
+              <div class="eq" id="m3"></div>
+              <div class="eq" id="m4"></div>
+              <div class="eq" id="m6"></div>
+              <p id="m5"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="math">
+          <h3>Inputs</h3>
+          <div class="eq" data-tex="A = M + g, \qquad c = L\,s\,f, \qquad a_j = A + jI \quad (j = 0, 1, \dots,\ a_j < R)"></div>
+          <p><i>A</i> is a sow's age at her first litter, <i>a<sub>j</sub></i> her age at litter <i>j</i>, <i>R</i> the age she
+            stops breeding, and <i>c</i> the expected surviving daughters per later litter (<i>L</i> litter size, <i>s</i> pup
+            survival, <i>f</i> female share).</p>
+
+          <h3>Adjustments per litter</h3>
+          <div class="eq" data-tex="\underbrace{\ell_f(a)}_{\text{sow survives to } a} \quad \underbrace{(1-d)^j}_{\text{survives } j \text{ litters}} \quad \underbrace{\rho_j = \begin{cases}\rho_1 & j=0\\ 1 & j\ge1\end{cases}}_{\text{first litter smaller}} \quad \underbrace{\phi(a) = \begin{cases} 0.61 & a > 900 \\ 1 & \text{else}\end{cases}}_{\text{older-sow pups}}"></div>
+          <p>Sow survival combines background mortality with an extra hazard <i>h<sub>b</sub></i> while breeding (from age
+            <i>M</i> until she stops):</p>
+          <div class="eq" data-tex="\ell_f(a) = \ell(a)\,(1-h_b)^{\,(\min(a,R) - M)^+/365}"></div>
+          <p>Background survival <i>ℓ</i>(<i>a</i>) is either flat, (1−<i>m</i>)<sup><i>a</i>/365</sup>, or the table below,
+            with a constant daily hazard inside each half-year band <i>k</i>:</p>
+          <div class="eq" data-tex="\ell(a) = \prod_{k} (1-q_k)^{\,\text{days lived in band } k\,/\,182.6}"></div>
+          <div class="lt"><table id="lifetable"></table></div>
+          <p><b>Source and caveats.</b> This is not an official mortality table. It comes from one study (Mata, PeerJ 2025):
+            Kaplan–Meier on the ages at death of 675 pet guinea pigs that died under UK vet care in 2019 (Royal Veterinary
+            College VetCompass records), in half-year intervals with no censoring.</p>
+          <ul>
+            <li>It is the age-at-death distribution of one year's deaths, not a cohort followed from birth. Treating it as
+              death probabilities by age assumes the pet population was stable over time, which is untested.</li>
+            <li>Only animals that reached a vet are included. Pups that die at breeders or before sale (~6–8 weeks) are mostly
+              missing, so early-age deaths are likely understated. Pup losses are modelled separately through <i>s</i>.</li>
+            <li>These are pets, not breeding sows. Sows that breed repeatedly likely die faster at the same age; <i>d</i> and
+              <i>h<sub>b</sub></i> cover that, but <i>h<sub>b</sub></i> is an assumption with no data behind it.</li>
+            <li>The tail rests on very few animals: the 7.5–8 yr value (0.27) is smoothed to 0.46, and values past 8.5 years
+              are extrapolated.</li>
+          </ul>
+          <p>ρ<sub>1</sub> ≈ 0.8: first litters averaged 3.2–3.5 pups vs 3.6–4.7 for later ones in a breeding colony
+            (Rowlands, J. Hygiene, 1949). φ: pups of sows over 900 days survived 0.43 vs 0.71 in a lab colony (ratio 0.61).</p>
+
+          <h3>Daughters per sow (R₀) and growth rate (Euler–Lotka)</h3>
+          <div class="eq" data-tex="w_j = c\,\rho_j\,\phi(a_j)\,\ell_f(a_j)\,(1-d)^j, \qquad R_0 = \sum_j w_j, \qquad 1 = \sum_j w_j\,e^{-r\,a_j}"></div>
+          <p>This counts litters by number (<i>j</i>), which is exact for an uncrowded herd with a boar present. The
+            simulation tracks, for each age group, the share of sows that haven't had a litter yet, so a sow that misses a
+            cycle (crowding, no boar) still gets the smaller first litter when she finally breeds.</p>
+          <div class="eq" data-tex="T_2 = \frac{\ln 2}{r}, \qquad \lambda_I = e^{rI}, \qquad \bar T = \frac{\sum_j a_j w_j e^{-r a_j}}{\sum_j w_j e^{-r a_j}}, \qquad P(t) \approx K\,n\,e^{rt}"></div>
+          <p>The herd grows if and only if R₀ &gt; 1; the right side falls as <i>r</i> rises, so there is exactly one root.
+            <i>T̄</i> is the generation time (average age of mothers). This <i>r</i> is the growth rate of an uncrowded,
+            non-inbred herd; crowding and inbreeding only slow it.</p>
+
+          <h3>Boar availability</h3>
+          <div class="eq" data-tex="\beta(t) = 1 - \left(1 - \frac{\ell(a_0+t)}{\ell(a_0)}\right)^{n_b} e^{-Y(t)}, \qquad Y(t) = \sum_{b \le t-70} M_b\,\ell(t-b)"></div>
+          <p>The chance a fertile boar was alive at conception: all <i>n<sub>b</sub></i> starting boars dead, and no young
+            fertile male (Poisson approximation, <i>M<sub>b</sub></i> = expected males born on day <i>b</i>). β → 1 as the herd
+            grows.</p>
+
+          <h3>Crowding (no selling or neutering)</h3>
+          <div class="eq" data-tex="K = \frac{\text{floor area}}{\text{area per pig}}, \qquad \delta(t) = \max\!\left(0,\ 1 - \frac{P(t)}{K}\right)"></div>
+          <p>A sow conceives with probability δ at conception time; a sow that doesn't waits for her next cycle. With no
+            culling, births fall to zero as the herd fills its space, so it levels off near <i>K</i>. A fast-growing herd can
+            overshoot <i>K</i> for a while (by ~15% with no deaths and back-to-back litters) because pregnancies already underway still
+            deliver. If <i>N</i> &gt; <i>K</i>, the herd never reaches <i>N</i>. This logistic form is an assumption: guinea
+            pigs breed less when crowded, but the exact curve isn't measured.</p>
+
+          <h3>Inbreeding</h3>
+          <div class="eq" data-tex="N_e = \frac{4 N_m N_f}{N_m + N_f}, \qquad \frac{d\theta}{dt} = \frac{1-\theta}{2 N_e \bar T}, \qquad F(t) = \theta(t - \bar T), \qquad \text{pup survival} \times e^{-\frac{2B}{2} F}"></div>
+          <p><i>N<sub>f</sub></i> = sows of breeding age, <i>N<sub>m</sub></i> = fertile boars, θ = average relatedness
+            (coancestry) of the breeders, <i>F</i> = inbreeding of pups born now. Starting pigs are assumed unrelated.
+            2<i>B</i> is the number of lethal equivalents: about 3.1 is the median for juvenile survival across 40 zoo mammal
+            populations (Ralls, Ballou &amp; Templeton, Conservation Biology 1988; the exact figure couldn't be checked against
+            the paper). At <i>F</i> = 0.25 (full-sib parents) that cuts pup survival by about 32%. This uses effective
+            population size, not a full pedigree; the Monte Carlo uses the same approximation with actual counts. In the
+            average model <i>N<sub>e</sub></i> comes from average herd sizes, which runs that died out pull down, so for very
+            small starting herds (under ~10) it overstates inbreeding and runs a few percent to ~15% pessimistic; the Monte
+            Carlo is the better guide there.</p>
+
+          <h3>Whole-litter stillbirths</h3>
+          <div class="eq" data-tex="\Pr(\text{pup survives}) = (1-w) \cdot \frac{s}{1-w} = s"></div>
+          <p>Same average, more variable outcomes; it only matters in the Monte Carlo.</p>
+
+          <h3>Costs and space</h3>
+          <div class="eq" data-tex="\text{area at } N = N \times \text{area per pig}, \qquad \text{total upkeep} = \frac{\text{cost per month}}{30.44} \sum_{t=0}^{T} P(t)"></div>
+          <p>Upkeep is summed over pig-days until the herd reaches <i>N</i>. Default prices are pet-owner prices; a breeder
+            buying in bulk would pay less per pig.</p>
+
+          <h3>Special case: Fibonacci-like</h3>
+          <p>With no mortality, no retirement, ρ₁ = 1, and a first litter exactly two intervals after birth
+            (<i>A</i> = 2<i>I</i>), set x = e<sup>rI</sup>:</p>
+          <div class="eq" data-tex="x^2 - x = c \;\Rightarrow\; \lambda = \frac{1+\sqrt{1+4c}}{2}, \qquad c = 1.5 \Rightarrow \lambda = \frac{1+\sqrt7}{2} \approx 1.823"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <p class="source">Sources: Mata, PeerJ 2025 (UK pet guinea pig lifetable); Rowlands, J. Hygiene 1949 (litter size by parity); Ralls, Ballou &amp; Templeton, Conservation Biology 1988 (inbreeding); lab colony study, PMC10000240 (pup survival).</p>
+</main>
+
+<script id="sim">
+/* SIM-START */
+const BOAR_MATURITY = 70;            // days; males fertile from ~56–70 days
+const OLD_AGE = 900, OLD_RATIO = 0.43 / 0.71;
+const BAND = 365.25 / 2;
+// Proportion dying in each half-year band: UK pet guinea pigs that died under vet care in 2019
+// (Mata, PeerJ 2025; RVC VetCompass records). Not an official table; death-based, no censoring.
+// 7.5–8 yr smoothed from 0.27 (few animals); 8.5+ yr extrapolated.
+const LIFE_Q = [0.03, 0.06, 0.05, 0.05, 0.07, 0.11, 0.11, 0.12, 0.20, 0.22, 0.27, 0.34, 0.38, 0.39, 0.46, 0.46, 0.88, 0.95, 1];
+
+// Background survival to each age in days, ℓ(0) = 1. p.ms scales the hazard (1 = as entered).
+function survTable(p, maxAge) {
+  const ms = p.ms ?? 1, l = new Float64Array(maxAge + 1); l[0] = 1;
+  if (p.mort === "flat") {
+    const qd = Math.pow(1 - p.m, ms / 365);
+    for (let a = 1; a <= maxAge; a++) l[a] = l[a - 1] * qd;
+  } else {
+    for (let a = 1; a <= maxAge; a++) {
+      const k = Math.floor((a - 1) / BAND), q = k < LIFE_Q.length ? LIFE_Q[k] : 1;
+      l[a] = q >= 1 ? 0 : l[a - 1] * Math.pow(1 - q, ms / BAND);
+    }
+  }
+  return l;
+}
+// Female survival: background × extra hazard while of breeding age (M ≤ age < R).
+function femTable(p, tbl) {
+  const Rt = p.R > 0 ? p.R : Infinity, f = new Float64Array(tbl.length);
+  const lh = p.hb > 0 ? Math.log(1 - p.hb) / 365 : 0;
+  for (let a = 0; a < tbl.length; a++) {
+    const exposed = Math.max(0, Math.min(a, Math.max(Rt, p.M)) - p.M);
+    f[a] = tbl[a] * Math.exp(lh * exposed);
+  }
+  return f;
+}
+const phi = (p, age) => (p.old === "on" && age > OLD_AGE) ? OLD_RATIO : 1;
+// Age-sex pyramid: a snapshot every 30 days, three-month age bands up to 3 years, then one band for older pigs.
+const PYR_EVERY = 30, PYR_WIDTH = 91, PYR_BANDS = 13;
+// Lexis surface: finer monthly age bins up to 4 years, then one bin for older pigs.
+const LEX_WIDTH = 30, LEX_BINS = 49;
+const rhoJ = (p, j) => j === 0 ? p.rho1 : 1;
+
+// Euler–Lotka for an uncrowded, non-inbred herd: sum_j w_j e^{-r a_j} = 1.
+function growthRate(p, fem) {
+  const A = p.M + p.g, c = p.L * p.s * p.f, Rt = p.R > 0 ? p.R : Infinity;
+  const flat = p.mort === "flat";
+  const qd = flat ? Math.pow(1 - p.m, (p.ms ?? 1) / 365) * (p.hb > 0 ? Math.pow(1 - p.hb, 1 / 365) : 1) : null;
+  const lf = a => a < fem.length ? fem[a] : (flat ? fem[fem.length - 1] * Math.pow(qd, a - fem.length + 1) : 0);
+  const ages = [], ws = [];
+  for (let j = 0; j < 20000; j++) {
+    const a = A + j * p.I;
+    if (a >= Rt) break;
+    const w = c * rhoJ(p, j) * phi(p, a) * lf(a) * Math.pow(1 - p.d, j);
+    if (!(w > 0)) break;
+    ages.push(a); ws.push(w);
+    if (j > 50 && w < 1e-12 * ws[0]) break;
+  }
+  const infinite = flat && p.m === 0 && p.d === 0 && p.hb === 0 && Rt === Infinity && c > 0;
+  const R0 = infinite ? Infinity : ws.reduce((x, y) => x + y, 0);
+  const out = { A, c, Rt, ages, ws, R0, r: -Infinity, Tgen: A };
+  if (!ws.length) return out;
+  const G = r => { let s = 0; for (let j = 0; j < ws.length; j++) s += ws[j] * Math.exp(-r * ages[j]); return s; };
+  let lo = -1, hi = 5;
+  for (let i = 0; i < 80; i++) { const mid = (lo + hi) / 2; (G(mid) > 1 ? lo = mid : hi = mid); }
+  out.r = (lo + hi) / 2;
+  let num = 0, den = 0;
+  for (let j = 0; j < ws.length; j++) { const e = ws[j] * Math.exp(-out.r * ages[j]); num += ages[j] * e; den += e; }
+  if (den > 0 && isFinite(num / den)) out.Tgen = num / den;
+  return out;
+}
+
+// Deterministic age-structured model on a daily clock. Cohorts are indexed by birth day.
+function simulate(p) {
+  const A = p.M + p.g, H = 20000, Rt = p.R > 0 ? p.R : Infinity;
+  const K = p.area > 0 ? p.area / p.space : Infinity;
+  const tbl = survTable(p, H + p.a0 + 2), fem = femTable(p, tbl);
+  const gr = growthRate(p, fem), Tg = Math.max(1, Math.round(gr.Tgen));
+  let maxAge = tbl.length - 1; while (maxAge > 0 && tbl[maxAge] === 0) maxAge--;
+  const nb = p.split === "oneboar" ? 1 : Math.floor(p.n / 2), ns = p.n - nb;
+  const F = new Float64Array(H + 1), Mc = new Float64Array(H + 1);
+  const Dd = new Float64Array(H + 1).fill(1);                         // survival of litter risk d, per cohort
+  const Nu = new Float64Array(H + 1).fill(1);                         // share not yet had a litter (first-litter size applies)
+  const beta = new Float64Array(H + 1), dens = new Float64Array(H + 1), theta = new Float64Array(H + 1);
+  const l0 = tbl[p.a0], lf0 = fem[p.a0];
+  let Ds = 1, Nus = 1, pigDays = p.n;
+  const tf = firstStartLitter(p);
+  const startM = t => tbl[p.a0 + t] / l0, startF = t => fem[p.a0 + t] / lf0;
+  const betaAt = (t, Y) => 1 - (p.a0 + t >= BOAR_MATURITY ? Math.pow(1 - startM(t), nb) : 1) * Math.exp(-Y);
+  const halfB = p.B / 2;
+  beta[0] = betaAt(0, 0); dens[0] = Math.max(0, 1 - p.n / K);
+  // Herd makeup (young sows, breeding sows, retired sows, young males, fertile boars) and deaths by cause
+  const startMix = a => ({ yf: a < p.M ? ns : 0, bs: a >= p.M && a < Rt ? ns : 0, rs: a >= Rt ? ns : 0,
+    ym: a < BOAR_MATURITY ? nb : 0, fb: a >= BOAR_MATURITY ? nb : 0 });
+  const zeroDeaths = () => ({ pup: 0, old: 0, inb: 0, litter: 0, hb: 0, bg: 0 });
+  const rows = [{ day: 0, sows: ns, boars: nb, total: p.n, F: 0, cum: 0, mix: startMix(p.a0), deaths: zeroDeaths() }];
+  // Age-sex pyramid snapshots: counts by age band, split by life stage
+  // (females: young / breeding / retired; males: young / fertile).
+  const pyramidAt = (t, total) => {
+    const z = () => new Float64Array(PYR_BANDS);
+    const s = { day: t, total, fy: z(), fb: z(), fr: z(), my: z(), mf: z(), lf: new Float64Array(LEX_BINS), lm: new Float64Array(LEX_BINS) };
+    const band = a => Math.min(PYR_BANDS - 1, Math.floor(a / PYR_WIDTH)), lbin = a => Math.min(LEX_BINS - 1, Math.floor(a / LEX_WIDTH));
+    const addF = (n, a) => { if (n > 0) { (a < p.M ? s.fy : a < Rt ? s.fb : s.fr)[band(a)] += n; s.lf[lbin(a)] += n; } };
+    const addM = (n, a) => { if (n > 0) { (a < BOAR_MATURITY ? s.my : s.mf)[band(a)] += n; s.lm[lbin(a)] += n; } };
+    addF(ns * (t ? startF(t) * Ds : 1), p.a0 + t); addM(nb * (t ? startM(t) : 1), p.a0 + t);
+    for (let b = Math.max(1, t - maxAge - 1); b <= t && t > 0; b++) {
+      const a = t - b; addF(F[b] * fem[a] * Dd[b], a); addM(Mc[b] * tbl[a], a);
+    }
+    return s;
+  };
+  const pyr = [pyramidAt(0, p.n)];
+  const littered = new Int32Array(H + 1).fill(-1);                    // day a cohort last littered
+  let dAcc = zeroDeaths(), bornAll = 0;
+  let hit = p.n >= p.N ? 0 : null, best = p.n, bestDay = 0, plateau = false, maxTotal = p.n;
+  // splits a female's death today into background vs extra breeding-sow hazard
+  const femDeaths = (n0, lPrevB, lNowB, lPrevF, lNowF) => {
+    const all = n0 * (lPrevF - lNowF), bg = lPrevB > 0 ? n0 * lPrevF * (1 - lNowB / lPrevB) : all;
+    dAcc.bg += bg; dAcc.hb += Math.max(0, all - bg);
+  };
+  for (let t = 1; t <= H && hit === null; t++) {
+    let pups = 0;
+    const tc = t - p.g, conc = tc >= 0 ? beta[tc] * dens[tc] : 1;
+    const Fo = t - Tg >= 0 ? theta[t - Tg] : 0, ib = halfB > 0 ? Math.exp(-halfB * Fo) : 1;
+    // starting pigs' deaths since yesterday
+    femDeaths(ns * Ds / lf0, tbl[p.a0 + t - 1], tbl[p.a0 + t], fem[p.a0 + t - 1], fem[p.a0 + t]);
+    dAcc.bg += nb * (startM(t - 1) - startM(t));
+    // alive × (first-timers × ρ1 + experienced); D = litter-risk survival, U = share still without a litter
+    const litter = (base, D, U, age) => {
+      const P = base * (U * p.rho1 + (D - U)) * conc * p.L, ph = phi(p, age);   // pups conceived and born
+      dAcc.pup += P * (1 - p.s); dAcc.old += P * p.s * (1 - ph); dAcc.inb += P * p.s * ph * (1 - ib);
+      dAcc.litter += base * D * conc * p.d;
+      return P * p.s * ph * ib;
+    };
+    if (t >= tf && (t - tf) % p.I === 0 && p.a0 + t < Rt) {            // starting sows
+      pups += litter(ns * startF(t), Ds, Nus, p.a0 + t);
+      Ds *= 1 - p.d * conc; Nus *= 1 - conc;
+    }
+    for (let b = t - A; b >= 1; b -= p.I) {                             // daughters due today
+      const age = t - b;
+      if (age >= Rt || age > maxAge) break;
+      if (F[b] === 0) continue;
+      femDeaths(F[b] * Dd[b], tbl[age - 1], tbl[age], fem[age - 1], fem[age]); littered[b] = t;
+      pups += litter(F[b] * fem[age], Dd[b], Nu[b], age);
+      Dd[b] *= 1 - p.d * conc; Nu[b] *= 1 - conc;
+    }
+    F[t] = pups * p.f; Mc[t] = pups * (1 - p.f); bornAll += pups;
+    const sAlive = ns * startF(t) * Ds, sa = p.a0 + t;
+    let sows = sAlive, boars = nb * startM(t), Y = 0;
+    const mix = { yf: sa < p.M ? sAlive : 0, bs: sa >= p.M && sa < Rt ? sAlive : 0, rs: sa >= Rt ? sAlive : 0,
+      ym: sa < BOAR_MATURITY ? nb * startM(t) : 0, fb: sa >= BOAR_MATURITY ? nb * startM(t) : 0 };
+    for (let b = Math.max(1, t - maxAge - 1); b <= t; b++) {          // one extra day so the oldest cohort's last deaths count
+      const age = t - b, fa = F[b] * fem[age] * Dd[b], mm = Mc[b] * tbl[age];
+      sows += fa; boars += mm;
+      if (age < p.M) mix.yf += fa; else if (age < Rt) mix.bs += fa; else mix.rs += fa;
+      if (age < BOAR_MATURITY) mix.ym += mm; else { mix.fb += mm; Y += mm; }
+      if (age >= 1) {
+        if (littered[b] !== t) femDeaths(F[b] * Dd[b], tbl[age - 1], tbl[age], fem[age - 1], fem[age]);
+        dAcc.bg += Mc[b] * (tbl[age - 1] - tbl[age]);
+      }
+    }
+    const Nf = mix.bs, Nm = mix.fb;
+    beta[t] = betaAt(t, Y);
+    const total = sows + boars;
+    dens[t] = Math.max(0, 1 - total / K);
+    const Ne = Nm > 0 && Nf > 0 ? 4 * Nm * Nf / (Nm + Nf) : 0;
+    theta[t] = Ne > 0 ? theta[t - 1] + (1 - theta[t - 1]) / (2 * Math.max(Ne, 1) * gr.Tgen) : theta[t - 1];
+    pigDays += total; maxTotal = Math.max(maxTotal, total);
+    if (total >= p.N) hit = t;
+    const row = () => { rows.push({ day: t, sows, boars, total, F: Fo, cum: pigDays, mix, deaths: dAcc }); dAcc = zeroDeaths(); };
+    if (t % p.I === 0 || hit !== null) row();
+    if (t % PYR_EVERY === 0 || hit !== null) pyr.push(pyramidAt(t, total));
+    if (total > best * 1.001) { best = total; bestDay = t; }
+    if (total < 0.5) break;                                             // fewer than one pig expected
+    if (gr.r > 0 && t > 4 * A && Math.log(p.N / total) / gr.r > 2 * (H - t)) break;   // can't reach N within the horizon
+    // levelled off against the space limit (only declared when the herd has filled most of its space)
+    if (K < Infinity && best >= 0.8 * K && t - bestDay > 3 * Math.max(A, p.I) + 730) { plateau = true; row(); break; }
+  }
+  return { rows, pyr, hit, tbl, fem, K, plateau, maxTotal, bornAll, pigDays: hit !== null ? pigDays : null, ...gr };
+}
+
+// ---- Monte Carlo: individual-based, every pig simulated ----
+function gauss() { return Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random()); }
+function litterSize(L) {
+  // 1–8 pups: 1 + Binomial(7, (L-1)/7), mean L, for 1 ≤ L ≤ 8. Outside that range: Poisson(L).
+  if (L >= 1 && L <= 8) { let k = 1; const pr = (L - 1) / 7; for (let i = 0; i < 7; i++) if (Math.random() < pr) k++; return k; }
+  if (L > 30) return Math.max(0, Math.round(L + Math.sqrt(L) * gauss()));
+  let k = 0, t = Math.exp(-L), prod = Math.random(); while (prod > t) { k++; prod *= Math.random(); } return k;
+}
+
+// One run. Returns {day} on reaching N, or {fail: "extinct" | "noboar" | "plateau" | "horizon"}.
+// If `stats` is given, adds each pig's deaths and days lived to it by half-year age band.
+// If `traj` is given ({step, alive, F} with Float32Array views), records herd size and pup inbreeding every `step` days.
+function mcRun(p, H, tbl, Tgen, stats, traj) {
+  const births = stats ? [] : null, exits = stats ? [] : null;   // per pig: birth day, death day
+  const out = traj ? {} : null;
+  const res = mcCore(p, H, tbl, Tgen, births, exits, out);
+  if (traj) {
+    const last = res.day !== undefined ? res.day : res.end, dead = res.fail === "extinct";
+    for (let k = 0; k < traj.alive.length; k++) {
+      const day = k * traj.step, d = Math.min(day, last);
+      traj.alive[k] = day > last && dead ? 0 : out.aliveAt[d];       // after the run ends: hold (or 0 if it died out)
+      const lag = Math.floor(d - Tgen);
+      traj.F[k] = lag >= 0 ? out.theta[lag] : 0;
+    }
+  }
+  if (stats) {
+    const end = res.day !== undefined ? res.day : res.end;
+    for (let k = 0; k < births.length; k++) {
+      const bd = births[k], dd = exits[k], a0 = Math.max(0, -bd), a1 = Math.min(dd, end) - bd;
+      // days lived in each band between ages a0 and a1
+      let a = a0;
+      while (a < a1) {
+        const band = Math.floor(a / BAND), edge = Math.min(a1, Math.ceil((band + 1) * BAND));
+        if (band < stats.expo.length) stats.expo[band] += edge - a;
+        a = edge;
+      }
+      if (dd <= end) { const band = Math.floor((dd - bd - 1) / BAND); if (band >= 0 && band < stats.deaths.length) stats.deaths[band]++; }
+    }
+  }
+  return res;
+}
+function mcCore(p, H, tbl, Tgen, births, exits, out) {
+  const A = p.M + p.g, Rt = p.R > 0 ? p.R : Infinity, K = p.area > 0 ? p.area / p.space : Infinity;
+  let maxAge = tbl.length - 1; while (maxAge > 0 && tbl[maxAge] === 0) maxAge--;
+  const lnq = p.mort === "flat" ? Math.log(1 - p.m) * (p.ms ?? 1) / 365 : 0;
+  const hbRate = p.hb > 0 ? -Math.log(1 - p.hb) / 365 : 0;
+  const lifeFrom = (day, age) => {                     // day of death from background mortality
+    if (p.mort === "flat") return lnq < 0 ? day + Math.max(1, Math.ceil(Math.log(1 - Math.random()) / lnq)) : Infinity;
+    const target = (1 - Math.random()) * tbl[age];
+    let lo = age + 1, hi = maxAge + 1;
+    while (lo < hi) { const mid = (lo + hi) >> 1; (tbl[mid] < target ? hi = mid : lo = mid + 1); }
+    return day + (lo - age);
+  };
+  const femaleDeath = (day, age) => {                  // background + extra hazard while of breeding age
+    let dd = lifeFrom(day, age);
+    if (hbRate > 0) {
+      const sa = Math.max(p.M, age), ea = Math.max(Rt, p.M);
+      if (sa < ea) {
+        const e = sa - Math.log(1 - Math.random()) / hbRate;
+        if (e < ea) dd = Math.min(dd, day + Math.max(1, Math.ceil(e - age)));
+      }
+    }
+    return dd;
+  };
+  const sp = Math.min(1, p.w < 1 ? p.s / (1 - p.w) : 0), halfB = p.B / 2;
+  const deaths = new Int32Array(H + 2), fertDeaths = new Int32Array(H + 2);
+  const fertGain = new Int32Array(H + BOAR_MATURITY + 2), fertile = new Int32Array(H + 2);
+  const femIn = new Int32Array(H + 2), femOut = new Int32Array(H + 2);
+  const aliveAt = new Float64Array(H + 2), theta = new Float64Array(H + 2);
+  if (out) { out.aliveAt = aliveAt; out.theta = theta; }
+  const litters = [];
+  let scheduled = 0, alive = 0, fert = 0, pendingMales = 0, lastFertDay = 0, breedF = 0;
+  let best = 0, bestDay = 0;
+  const push = (day, dd, bd, par, id) => {
+    if (day > H || day - bd >= Rt || dd <= day) return;
+    (litters[day] || (litters[day] = [])).push(dd, bd, par, id); scheduled++;
+  };
+  const record = (bd, dd) => { if (!births) return -1; births.push(bd); exits.push(dd); return births.length - 1; };
+  const addMale = (day, age) => {
+    const dd = lifeFrom(day, age); alive++; record(day - age, dd);
+    if (dd <= H) deaths[dd]++;
+    const matDay = day + Math.max(0, BOAR_MATURITY - age);
+    if (dd > matDay) {
+      if (matDay === day) fert++; else { fertGain[matDay]++; pendingMales++; }
+      if (dd <= H) fertDeaths[dd]++;
+    }
+  };
+  const breedingWindow = (dd, bd) => [bd + p.M, Math.min(dd, bd + Rt)];   // [in, out) days of breeding age
+  const addFemale = (day, age, firstLitter) => {
+    const dd = femaleDeath(day, age), bd = day - age; alive++;
+    const id = record(bd, dd);
+    if (dd <= H) deaths[dd]++;
+    const [inD, outD] = breedingWindow(dd, bd);
+    if (outD > Math.max(inD, day)) {
+      if (inD <= day) breedF++; else if (inD <= H) femIn[inD]++;
+      if (outD <= H) femOut[outD]++;
+    }
+    push(firstLitter, dd, bd, 0, id);
+  };
+  const nb = p.split === "oneboar" ? 1 : Math.floor(p.n / 2), ns = p.n - nb;
+  for (let i = 0; i < nb; i++) addMale(0, p.a0);
+  for (let i = 0; i < ns; i++) addFemale(0, p.a0, firstStartLitter(p));
+  fertile[0] = fert; if (fert > 0) lastFertDay = 0;
+  aliveAt[0] = alive; best = alive;
+  if (alive >= p.N) return { day: 0 };
+  for (let day = 1; day <= H; day++) {
+    alive -= deaths[day];
+    fert += fertGain[day] - fertDeaths[day]; pendingMales -= fertGain[day];
+    breedF += femIn[day] - femOut[day];
+    fertile[day] = fert; if (fert > 0) lastFertDay = day;
+    const Fo = day - Tgen >= 0 ? theta[Math.floor(day - Tgen)] : 0, ib = halfB > 0 ? Math.exp(-halfB * Fo) : 1;
+    const due = litters[day];
+    if (due) {
+      litters[day] = undefined; scheduled -= due.length / 4;
+      const cd = Math.max(0, day - p.g);
+      const dens = K < Infinity ? Math.max(0, 1 - aliveAt[cd] / K) : 1;
+      for (let i = 0; i < due.length; i += 4) {
+        const dd = due[i], bd = due[i + 1], par = due[i + 2], id = due[i + 3], age = day - bd;
+        if (fertile[cd] === 0) { push(day + 1, dd, bd, par, id); continue; }   // no boar: conceives once one is present
+        if (dens < 1 && Math.random() >= dens) { push(day + p.I, dd, bd, par, id); continue; }   // crowded: skips a cycle
+        if (Math.random() >= p.w) {
+          const k = litterSize(p.L * rhoJ(p, par)), ps = Math.min(1, sp * phi(p, age) * ib);
+          for (let j = 0; j < k; j++) if (Math.random() < ps) {
+            if (Math.random() < p.f) addFemale(day, 0, day + A); else addMale(day, 0);
+          }
+        }
+        if (Math.random() < p.d) {                     // sow dies at this litter
+          if (dd <= H) deaths[dd]--; alive--;
+          const outD = Math.min(dd, bd + Rt); breedF--; if (outD <= H) femOut[outD]--;
+          if (id >= 0) exits[id] = day;
+          continue;
+        }
+        push(day + p.I, dd, bd, par + 1, id);
+      }
+    }
+    aliveAt[day] = alive;
+    const Ne = fert > 0 && breedF > 0 ? 4 * fert * breedF / (fert + breedF) : 0;
+    theta[day] = Ne > 0 ? theta[day - 1] + (1 - theta[day - 1]) / (2 * Math.max(Ne, 1) * Tgen) : theta[day - 1];
+    if (alive >= p.N) return { day };
+    if (alive <= 0 || scheduled === 0) return { fail: "extinct", end: day };
+    if (fert === 0 && pendingMales === 0 && day > lastFertDay + p.g) return { fail: "noboar", end: day };
+    if (alive > best) { best = alive; bestDay = day; }
+    if (K < Infinity && best >= 0.8 * K && day - bestDay > 3 * Math.max(A, p.I) + 730) return { fail: "plateau", end: day };
+  }
+  return { fail: "horizon", end: H };
+}
+
+// Randomly perturb uncertain inputs by a factor within ±u (uniform), for the uncertainty runs.
+function perturb(p, u) {
+  const x = () => 1 + u * (2 * Math.random() - 1), q = { ...p };
+  q.L = p.L * x(); q.s = Math.min(1, p.s * x()); q.d = Math.min(1, p.d * x());
+  q.I = Math.max(p.g, Math.round(p.I * x())); q.ms = (p.ms ?? 1) * x();
+  q.hb = Math.min(0.99, p.hb * x()); q.B = p.B * x(); q.rho1 = p.rho1 * x();
+  q.w = Math.min(p.w * x(), 1 - q.s);
+  return q;
+}
+
+// Day the starting sows' first litter arrives: bred once they reach age M and the starting boars are fertile.
+function firstStartLitter(p) { return p.g + Math.max(0, p.M - p.a0, BOAR_MATURITY - p.a0); }
+
+// A batch of Monte Carlo runs (used by the Web Workers and the single-thread fallback).
+// Returns outcome days (or -1 fail codes) and, for luck-only runs, deaths and exposure by half-year age band.
+const FAIL = { extinct: -1, noboar: -2, plateau: -3, horizon: -4 };
+function runBatch({ p, H, u, count, collect, trajStep }) {
+  const base = survTable(p, H + p.a0 + 2), baseT = growthRate(p, femTable(p, base)).Tgen;
+  const res = new Float64Array(count), nb = LIFE_Q.length + 2;
+  const deaths = new Float64Array(nb), expo = new Float64Array(nb), perRun = collect ? new Float32Array(count * nb) : null;
+  const G = trajStep ? Math.floor(H / trajStep) + 1 : 0;
+  const tAlive = G ? new Float32Array(count * G) : null, tF = G ? new Float32Array(count * G) : null;
+  for (let i = 0; i < count; i++) {
+    let q = p, tbl = base, Tg = baseT;
+    if (u > 0) { q = perturb(p, u); tbl = survTable(q, H + q.a0 + 2); Tg = growthRate(q, femTable(q, tbl)).Tgen; }
+    const st = collect ? { deaths: new Float64Array(nb), expo: new Float64Array(nb) } : null;
+    const tr = G ? { step: trajStep, alive: tAlive.subarray(i * G, (i + 1) * G), F: tF.subarray(i * G, (i + 1) * G) } : null;
+    const r = mcRun(q, H, tbl, Tg, st, tr);
+    res[i] = r.day !== undefined ? r.day : FAIL[r.fail];
+    if (st) for (let k = 0; k < nb; k++) {
+      deaths[k] += st.deaths[k]; expo[k] += st.expo[k];
+      perRun[i * nb + k] = st.expo[k] >= 5 * 365 ? 1 - Math.exp(-st.deaths[k] / st.expo[k] * BAND) : NaN;   // needs ≥ 5 pig-years
+    }
+  }
+  return { res, deaths, expo, perRun, tAlive, tF, G };
+}
+/* SIM-END */
+</script>
+<script>
+
+const $ = id => document.getElementById(id);
+const selects = ["split", "mort", "old"];
+const bio = ["a0", "g", "I", "L", "rho1", "f", "M", "R", "mort", "m", "hb", "s", "w", "d", "old", "B", "area", "space", "cost"];
+const ids = ["n", "N", "split", ...bio];
+// Realistic assumptions (sources in the How it works tab). The reset button restores them; n and N are left alone.
+const REALISTIC = { split: "half", a0: 180, g: 68, I: 120, L: 3, rho1: 0.8, f: 0.5, M: 82, R: 900, mort: "life", m: 0.10, hb: 0.05,
+  s: 0.70, w: 0.10, d: 0.05, old: "on", B: 3.1, area: 0, space: 0.3, cost: 30, u: 15 };
+function resetRealistic() {
+  for (const [key, v] of Object.entries(REALISTIC)) $(key).value = v;
+  run();
+}
+$("reset").onclick = resetRealistic;
+
+// The two numbers typed into the headline sentence grow with their contents.
+function fitInline(el) { el.style.width = Math.max(1.6, String(el.value || "").length + 0.6) + "ch"; }
+
+// Tabs: canvases inside hidden tabs have no width, so charts are redrawn when a tab is shown.
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+function selectTab(tab, focus) {
+  tabs.forEach(t => {
+    const on = t === tab;
+    t.setAttribute("aria-selected", on); t.tabIndex = on ? 0 : -1;
+    $(t.getAttribute("aria-controls")).hidden = !on;
+  });
+  if (focus) tab.focus();
+  requestAnimationFrame(() => {
+    run(); showMC(); drawFounders();
+    // play the pyramid once, the first time the tab is opened (not for reduced-motion users)
+    if (tab.id === "t-time" && !pyrState.shown) { pyrState.shown = true; if (!reduceMotion) { pyrState.i = 0; pyrPlay(); } }
+  });
+}
+tabs.forEach((t, i) => {
+  t.onclick = () => selectTab(t);
+  t.onkeydown = e => {
+    const k = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (k) { e.preventDefault(); selectTab(tabs[(i + k + tabs.length) % tabs.length], true); }
+  };
+});
+
+// The headline answer and the line under it.
+function updateHeadline(r, p) {
+  const yrs = d => (d / 365.25).toFixed(d < 3652 ? 1 : 0);
+  if (r.hit !== null) {
+    $("hVerb").textContent = "you'd have";
+    // brand: the headline's number takes the accent colour
+    $("hWhen").innerHTML = r.hit === 0 ? "already." : `in about <span class="hl">${yrs(r.hit)} years</span>.`;
+    $("hSub").textContent = r.hit === 0 ? "" : `That's ${r.hit.toLocaleString()} days on average` +
+      (r.r > 0 ? `, with the herd doubling about every ${Math.round(Math.LN2 / r.r)} days` : "") + ". " +
+      (mc && !mc.running && mc.luck.n && JSON.stringify(mc.p) === JSON.stringify(p) ? mcHeadline()
+        : "The Luck tab shows how much that varies from herd to herd.");
+  } else {
+    $("hVerb").textContent = "you'd never reach";
+    $("hWhen").textContent = ".";
+    $("hSub").textContent = r.plateau ? `The herd fills its floor space and levels off near ${Math.round(r.maxTotal).toLocaleString()} pigs.`
+      : r.r > 0 ? "Growth is too slow to get there within 55 years." : "Each sow raises fewer than one breeding daughter, so the herd shrinks.";
+  }
+}
+function mcHeadline() {
+  const S = mc.unc.n ? mc.unc : mc.luck, ok = Float64Array.from(S.days).sort();
+  const at = q => { const i = Math.ceil(q * S.n) - 1; return i < ok.length ? (ok[i] / 365.25).toFixed(1) : null; };
+  const a50 = at(0.5), a80 = at(0.8), never = Math.round(100 * (1 - ok.length / S.n));
+  const tail = never === 0 ? "every simulated herd made it." : `${never}% never do.`;
+  return a50 ? `In the simulations, half the herds get there within ${a50} years` + (a80 ? ` and 80% within ${a80}` : "") + "; " + tail
+    : `In the simulations, ${tail}`;
+}
+
+function fmt(x) {
+  if (!isFinite(x)) return "∞";
+  if (x >= 1e6) return x.toExponential(2);
+  if (x >= 100) return Math.round(x).toLocaleString();
+  return x.toFixed(1);
+}
+const money = x => !isFinite(x) ? "–" : x >= 1e6 ? "$" + (x / 1e6).toFixed(x >= 1e8 ? 0 : 1) + "M" : "$" + Math.round(x).toLocaleString();
+
+function read() {
+  const p = {}; for (const id of ids) p[id] = selects.includes(id) ? $(id).value : parseFloat($(id).value);
+  return p;
+}
+
+// Validate and clamp inputs. Returns {p, warn} or {error}.
+function sanitize() {
+  const p = read(), warn = [];
+  if (ids.some(id => !selects.includes(id) && !isFinite(p[id]))) return { error: "Fill in every field." };
+  const clamp = (x, a, b) => Math.min(Math.max(x, a), b);
+  p.n = Math.round(p.n); p.N = Math.ceil(p.N);
+  if (p.n < 2) return { error: "Need at least 2 starting pigs (a boar and a sow)." };
+  if (!(p.N >= 1)) return { error: "Target N must be at least 1." };
+  p.a0 = Math.round(clamp(p.a0, 0, 3000));
+  p.g = Math.round(clamp(p.g, 1, 400)); p.M = Math.round(clamp(p.M, 0, 2000));
+  if (p.I < p.g) { warn.push("Interval can't be shorter than gestation; using gestation."); p.I = p.g; }
+  p.I = Math.round(clamp(p.I, p.g, 2000)); p.R = Math.round(clamp(p.R, 0, 20000));
+  p.L = clamp(p.L, 0, 1000); p.rho1 = clamp(p.rho1, 0, 3); p.f = clamp(p.f, 0, 1); p.s = clamp(p.s, 0, 1);
+  p.w = clamp(p.w, 0, 1); p.d = clamp(p.d, 0, 1); p.m = clamp(p.m, 0, 0.99); p.hb = clamp(p.hb, 0, 0.99);
+  p.B = clamp(p.B, 0, 50); p.area = Math.max(0, p.area); p.space = Math.max(0.01, p.space); p.cost = Math.max(0, p.cost);
+  p.ms = 1;
+  if (p.w > 1 - p.s) { p.w = 1 - p.s; warn.push(`Whole-litter loss can't exceed total pup loss; using ${p.w.toFixed(2)}.`); }
+  const K = p.area > 0 ? p.area / p.space : Infinity;
+  if (K < p.N) warn.push(`The floor area holds about ${Math.floor(K).toLocaleString()} pigs, fewer than N; with no selling the herd can't get there.`);
+  if (K < p.n) warn.push("The starting herd already exceeds the floor area, so no breeding happens.");
+  if (p.n < 10 && (p.B > 0 || K < Infinity)) warn.push("With fewer than 10 starting pigs, chance events (dying out, inbreeding in a tiny herd) matter a lot; the average model is only approximate here, so trust the Monte Carlo.");
+  if (p.mort === "life" && p.a0 > 2500) warn.push("Starting pigs that old have little life left.");
+  if (p.R > 0 && p.R <= p.M + p.g) warn.push("Sows retire before their first litter, so daughters never breed.");
+  if (p.M > 240) warn.push("First breeding after ~8 months risks fatal labor.");
+  if (p.L > 8) warn.push("Litters above ~8 are unrealistic.");
+  return { p, warn };
+}
+
+function clearResults(msg) {
+  $("warn").textContent = msg;
+  ["kDays", "kMonths", "kDbl", "kR0", "kArea", "kMonthly", "kTotal"].forEach(id => $(id).textContent = "–");
+  $("rows").innerHTML = "";
+  for (const id of ["chart", "tornado"]) { const cv = $(id); cv.getContext("2d").clearRect(0, 0, cv.width, cv.height); }
+  ["m1", "m2", "m3", "m4", "m6"].forEach(id => $(id).textContent = "");
+}
+
+let sensTimer = null;
+function run() {
+  $("m").disabled = $("mort").value !== "flat";
+  const v = sanitize();
+  if (v.error) return clearResults(v.error);
+  const { p, warn } = v;
+  $("warn").textContent = warn.join(" ");
+
+  const r = simulate(p);
+  $("kDays").textContent = r.hit !== null ? r.hit.toLocaleString() : "never";
+  $("kMonths").textContent = r.hit !== null ? (r.hit / 30.44).toFixed(1) : "–";
+  $("kDbl").textContent = r.r > 0 ? Math.round(Math.LN2 / r.r) : "∞";
+  $("kR0").textContent = isFinite(r.R0) ? r.R0.toFixed(2) : "∞";
+  $("kArea").textContent = Math.round(p.N * p.space).toLocaleString() + " m²";
+  $("kMonthly").textContent = money(p.N * p.cost);
+  $("kTotal").textContent = r.pigDays !== null ? money(r.pigDays * p.cost / 30.44) : "–";
+  if (r.hit !== null && r.K < p.N) $("warn").textContent += " It only gets there by temporarily overshooting the space limit (pregnancies already underway still deliver).";
+  if (r.hit === null) $("warn").textContent += r.plateau
+    ? ` The herd levels off at about ${Math.round(r.maxTotal).toLocaleString()} pigs, below N.`
+    : r.r > 0 ? " Doesn't reach N within 55 years." : " The herd shrinks (R₀ ≤ 1), so it never reaches N.";
+
+  $("rows").innerHTML = r.rows.map(row =>
+    `<tr class="${row.day === r.hit ? "hit" : ""}"><td>${row.day}</td>` +
+    `<td>${fmt(row.sows)}</td><td>${fmt(row.boars)}</td><td>${fmt(row.total)}</td><td>${row.F.toFixed(3)}</td></tr>`).join("");
+  draw(r, p);
+  liveMath(r, p);
+  updateDiagram(p);
+  lastP = p; drawMort();
+  drawDetCharts(r, p);
+  updateHeadline(r, p); drawFamily(p);
+  clearTimeout(sensTimer); sensTimer = setTimeout(() => sensitivity(p, r), 250);
+}
+
+function tex(el, s) {
+  if (window.katex) katex.render(s, el, { displayMode: true, throwOnError: false });
+  else el.textContent = s;
+}
+function num(x, d = 3) { return isFinite(x) ? (+x.toFixed(d)).toString() : String.raw`\infty`; }
+
+function liveMath(r, p) {
+  const { A, c, ages } = r, Rt = p.R > 0 ? p.R : Infinity;
+  const J = ages.length;
+  const agesTxt = J === 0 ? String.raw`\varnothing` : J <= 6 ? ages.join(", ") : `${ages[0]}, ${ages[1]}, \\dots, ${ages[J - 1]}`;
+  tex($("m1"), String.raw`A = ${p.M}+${p.g} = ${A}, \quad c = ${num(p.L, 2)}\times${num(p.s, 2)}\times${num(p.f, 2)} = ${num(c)}, \quad a_j \in \{${agesTxt}\}` +
+    (isFinite(Rt) ? String.raw`\ (${J}\text{ litters before } R = ${Rt})` : ""));
+  if (J) {
+    const show = Math.min(J, 3), parts = [];
+    for (let j = 0; j < show; j++)
+      parts.push(String.raw`${num(c)}\cdot${num(rhoJ(p, j), 2)}\cdot${num(phi(p, ages[j]), 2)}\cdot${num(r.fem[ages[j]] ?? 0, 3)}\cdot${num(Math.pow(1 - p.d, j), 3)}`);
+    tex($("m2"), String.raw`R_0 = ${parts.join(" + ")}${J > show ? String.raw` + \cdots` : ""} = ${isFinite(r.R0) ? num(r.R0, 2) : String.raw`\infty`}`);
+  } else tex($("m2"), String.raw`R_0 = 0 \;\text{(no litters)}`);
+  if (r.r > 0) {
+    tex($("m3"), String.raw`\sum_j w_j e^{-r a_j} = 1 \;\Rightarrow\; r = ${num(r.r, 5)}\text{/day}, \quad T_2 = ${num(Math.LN2 / r.r, 1)}\text{ days}, \quad \lambda_{${p.I}} = ${num(Math.exp(r.r * p.I), 3)}, \quad \bar T = ${num(r.Tgen, 0)}\text{ days}`);
+  } else tex($("m3"), String.raw`R_0 \le 1 \;\Rightarrow\; r \le 0:\ \text{the herd shrinks}`);
+  const K = r.K, lastF = r.rows[r.rows.length - 1].F;
+  tex($("m6"), String.raw`K = ${isFinite(K) ? String.raw`\frac{${p.area}}{${p.space}} = ${Math.floor(K).toLocaleString()}\text{ pigs}` : String.raw`\infty`}, \qquad F_{\text{end}} = ${num(lastF, 3)} \Rightarrow \text{pup survival} \times ${num(Math.exp(-p.B / 2 * lastF), 3)}`);
+  if (r.hit !== null && r.r > 0 && r.hit > 0) {
+    const ref = r.rows.length > 2 ? r.rows[r.rows.length - 2] : r.rows[r.rows.length - 1];
+    const Kc = ref.total / (p.n * Math.exp(r.r * ref.day));
+    const T = Math.log(p.N / (Kc * p.n)) / r.r;
+    tex($("m4"), String.raw`K_0 \approx ${num(Kc)}, \quad T \approx \frac{1}{${num(r.r, 5)}}\ln\!\left(\frac{${p.N}}{${num(Kc)}\times${p.n}}\right) \approx ${num(T, 0)}\text{ days} \quad (\text{simulation: } ${r.hit})`);
+  } else $("m4").textContent = "";
+  $("m5").textContent = "K₀ (the start-up constant, written K in the formula above) is fitted from the simulation. With crowding or inbreeding the simple exponential T is only a guide; the simulation result at the top is authoritative.";
+}
+
+function lifetableHTML() {
+  const head = LIFE_Q.map((_, k) => `<th>${(k / 2).toFixed(1)}–${((k + 1) / 2).toFixed(1)}</th>`).join("");
+  const vals = LIFE_Q.map(q => `<td>${q.toFixed(2)}</td>`).join("");
+  $("lifetable").innerHTML = `<tr><th>Age (yr)</th>${head}</tr><tr><td><i>q<sub>k</sub></i></td>${vals}</tr>`;
+}
+lifetableHTML();
+document.querySelectorAll("[data-tex]").forEach(el => tex(el, el.dataset.tex));
+
+function cssVars() {
+  const css = getComputedStyle(document.documentElement), g = k => css.getPropertyValue(k).trim();
+  return { ink: g("--muted"), text: g("--ink"), line: g("--line"), acc: g("--accent"), acc2: g("--accent2"), bg: g("--bg"), signal: g("--signal") };
+}
+function setup(cv) {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext("2d"); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, W, H);
+  ctx.font = '11px "IBM Plex Mono", ui-monospace, monospace';   // brand: data and ticks in Plex Mono
+  return { ctx, W, H };
+}
+
+function draw(r, p) {
+  const { ctx, W, H } = setup($("chart")), c = cssVars();
+  const padL = 58, padR = 10, padT = 10, padB = 26;
+  const pts = r.rows.filter(x => x.total > 0);
+  if (pts.length < 2) return;
+  const maxDay = pts[pts.length - 1].day;
+  const yMin = Math.max(1, Math.min(...pts.map(x => x.total), p.n));
+  const yMax = Math.max(p.N, ...pts.map(x => x.total));
+  const lmin = Math.floor(Math.log10(yMin)), lmax = Math.ceil(Math.log10(yMax));
+  const X = d => padL + (W - padL - padR) * d / maxDay;
+  const Y = v => padT + (H - padT - padB) * (1 - (Math.log10(Math.max(v, 1e-9)) - lmin) / Math.max(1, lmax - lmin));
+  ctx.fillStyle = c.ink; ctx.strokeStyle = c.line; ctx.lineWidth = 1;
+  for (let e = lmin; e <= lmax; e++) {
+    const y = Y(Math.pow(10, e));
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.textAlign = "right"; ctx.fillText(e >= 6 ? "1e" + e : Math.pow(10, e).toLocaleString(), padL - 6, y + 4);
+  }
+  ctx.textAlign = "center";
+  for (let i = 0; i <= 5; i++) { const d = maxDay * i / 5; ctx.fillText(Math.round(d) + "d", X(d), H - 8); }
+  const hline = (v, color, label) => {
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = color; ctx.beginPath();
+    ctx.moveTo(padL, Y(v)); ctx.lineTo(W - padR, Y(v)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = color; ctx.textAlign = "left"; ctx.fillText(label, padL + 4, Y(v) - 5);
+  };
+  hline(p.N, c.acc2, "N = " + p.N.toLocaleString());
+  if (isFinite(r.K) && r.K <= yMax * 10 && Math.abs(Math.log10(r.K / p.N)) > 0.05) hline(r.K, c.ink, "space limit " + Math.floor(r.K).toLocaleString());
+  ctx.strokeStyle = c.acc; ctx.lineWidth = 2; ctx.beginPath();
+  pts.forEach((x, i) => i ? ctx.lineTo(X(x.day), Y(x.total)) : ctx.moveTo(X(x.day), Y(x.total)));
+  ctx.stroke();
+  ctx.fillStyle = c.acc; pts.forEach(x => { ctx.beginPath(); ctx.arc(X(x.day), Y(x.total), 2.5, 0, 7); ctx.fill(); });
+  // brand: the LED, one square once per graphic, on the point it's about (the day the herd reaches N);
+  // its label takes the series colour, never the LED colour
+  if (r.hit !== null) {
+    const x = X(r.hit), y = Y(Math.max(p.N, 1));
+    ctx.fillStyle = c.signal; ctx.fillRect(x - 5, y - 5, 10, 10);
+    ctx.font = '600 11px "IBM Plex Mono", ui-monospace, monospace'; ctx.fillStyle = c.acc; ctx.textAlign = "right";
+    ctx.fillText(`day ${r.hit.toLocaleString()}`, x - 10, y - 9);
+  }
+}
+
+// ---- Model diagram: live numbers ----
+function updateDiagram(p) {
+  const pc = x => Math.round(100 * x) + "%";
+  $("dBS").textContent = `litter every ${p.I} d, ages ${p.M + p.g}–${p.R > 0 ? p.R + " d" : "death"}`;
+  $("dLT").textContent = `${p.L} pups` + (p.rho1 !== 1 ? ` (first litter ×${p.rho1})` : "");
+  $("dPS").textContent = `pup survival ${p.s}` + (p.w > 0 ? `, ${pc(p.w)} of litters lost` : "");
+  $("dF").textContent = `♀ ${pc(p.f)}`; $("dMm").textContent = `♂ ${pc(1 - p.f)}`;
+  $("dYS").textContent = `first conception at ${p.M} d`;
+  $("dDeath1").textContent = "all pigs: " + (p.mort === "flat" ? `${pc(p.m)} a year` : "pet-records mortality by age");
+  const sow = [p.hb > 0 ? `+${pc(p.hb)}/yr while breeding` : "", p.d > 0 ? `${pc(p.d)} per litter` : ""].filter(Boolean).join(", ");
+  $("dDeath2").textContent = sow ? "sows: " + sow : "no extra sow deaths";
+}
+
+// ---- Mortality chart: Mata study vs model input vs simulated herds ----
+const MATA_RAW = [0.03, 0.06, 0.05, 0.05, 0.07, 0.11, 0.11, 0.12, 0.20, 0.22, 0.27, 0.34, 0.38, 0.39, 0.46, 0.27, 0.88];  // to 8.5 yr
+let lastP = null;
+function drawMort() {
+  const p = lastP; if (!p) return;
+  const { ctx, W, H } = setup($("mortchart")), c = cssVars();
+  const nb = 18, padL = 40, padR = 10, padT = 10, padB = 30;
+  const X = k => padL + (W - padL - padR) * k / nb, Y = q => padT + (H - padT - padB) * (1 - q);
+  ctx.strokeStyle = c.line; ctx.fillStyle = c.ink; ctx.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const q = i / 5, y = Y(q);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.textAlign = "right"; ctx.fillText(Math.round(q * 100) + "%", padL - 6, y + 4);
+  }
+  ctx.textAlign = "center";
+  for (let yr = 0; yr <= 9; yr++) ctx.fillText(yr + " yr", X(2 * yr), H - 12);
+  // simulated: per-run spread (10th–90th percentile) and pooled rate
+  const sim = mc && mc.perRun.length ? mortStats() : null;
+  if (sim) {
+    ctx.fillStyle = c.acc; ctx.globalAlpha = 0.18;
+    sim.bands.forEach((b, k) => { if (b) ctx.fillRect(X(k) + 1, Y(b[1]), X(k + 1) - X(k) - 2, Y(b[0]) - Y(b[1])); });
+    ctx.globalAlpha = 1; ctx.strokeStyle = c.acc; ctx.lineWidth = 2.2;
+    sim.pooled.forEach((q, k) => { if (q !== null) { ctx.beginPath(); ctx.moveTo(X(k) + 1, Y(q)); ctx.lineTo(X(k + 1) - 1, Y(q)); ctx.stroke(); } });
+  }
+  // model input (dashed steps)
+  ctx.strokeStyle = c.acc2; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath();
+  for (let k = 0; k < nb; k++) {
+    const q = p.mort === "flat" ? 1 - Math.pow(1 - p.m, 0.5) : LIFE_Q[k];
+    k ? ctx.lineTo(X(k), Y(q)) : ctx.moveTo(X(k), Y(q)); ctx.lineTo(X(k + 1), Y(q));
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+  // Mata study (dots)
+  ctx.fillStyle = c.text; ctx.strokeStyle = c.text; ctx.lineWidth = 1;
+  MATA_RAW.forEach((q, k) => { ctx.beginPath(); ctx.arc((X(k) + X(k + 1)) / 2, Y(q), 3.2, 0, 7); ctx.fill(); });
+  $("mortlegend").innerHTML =
+    `<span><span class="sw" style="background:${c.text};border-radius:50%"></span>Mata study (pet guinea pigs)</span>` +
+    `<span><span class="sw" style="border-top:2px dashed ${c.acc2};height:0"></span>model input (${p.mort === "flat" ? "flat rate" : "pet records, smoothed"})</span>` +
+    `<span><span class="sw" style="background:${c.acc}"></span>simulated herds: pooled</span>` +
+    `<span><span class="sw" style="background:${c.acc};opacity:.25"></span>middle 80% of runs</span>`;
+  $("mortnote").textContent = sim
+    ? `From ${mc.mortRuns.toLocaleString()} luck-only runs (${Math.round(sim.pigYears).toLocaleString()} pig-years). Simulated rates sit above the study at ` +
+      `breeding ages because sows also face the per-litter risk and the extra breeding-sow deaths, and pups lost at birth are ` +
+      `excluded as in the study. Few simulated pigs reach old age before the herd hits N, so later ages are missing or ` +
+      `noisy (shown only with at least 50 pig-years of data).`
+    : "Run the Monte Carlo to add the mortality the simulated herds actually experience.";
+}
+function mortStats() {
+  const nb = LIFE_Q.length + 2, pooled = [], bands = [], cols = Array.from({ length: nb }, () => []);
+  for (const chunk of mc.perRun) for (let i = 0; i < chunk.length; i++) { const v = chunk[i]; if (!Number.isNaN(v)) cols[i % nb].push(v); }
+  let pigYears = 0;
+  for (let k = 0; k < nb; k++) {
+    const e = mc.mortExpo[k] / 365; pigYears += e;
+    pooled.push(e >= 50 ? 1 - Math.exp(-mc.mortDeaths[k] / mc.mortExpo[k] * BAND) : null);
+    const col = Float64Array.from(cols[k]).sort();
+    bands.push(e >= 50 && col.length >= 20 ? [pct(col, 0.1), pct(col, 0.9)] : null);
+  }
+  return { pooled, bands, pigYears };
+}
+
+// ---- Shared chart helpers ----
+function logTicks(lo, hi) {
+  const t = [];
+  for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++)
+    for (const m of hi / lo < 50 ? [1, 2, 5] : [1]) { const v = m * Math.pow(10, e); if (v >= lo * 0.999 && v <= hi * 1.001) t.push(v); }
+  return t;
+}
+const short = v => v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M" : v >= 1e3 ? (v / 1e3).toFixed(v >= 1e4 ? 0 : 1) + "k" : String(+v.toFixed(2));
+// Axes: o = {x:[lo,hi], y:[lo,hi], ylog, xfmt, yfmt, y2:{y:[lo,hi], log, fmt}}; returns mapping functions.
+function axes(cv, o) {
+  const { ctx, W, H } = setup(cv), c = cssVars();
+  const padL = 52, padR = o.y2 ? 50 : 10, padT = 10, padB = 24;
+  const lin = (v, [a, b], px0, px1) => px0 + (px1 - px0) * (v - a) / (b - a || 1);
+  const lg = (v, [a, b], px0, px1) => px0 + (px1 - px0) * (Math.log10(Math.max(v, a)) - Math.log10(a)) / (Math.log10(b) - Math.log10(a) || 1);
+  const X = v => lin(v, o.x, padL, W - padR);
+  const Y = v => (o.ylog ? lg : lin)(v, o.y, H - padB, padT);
+  const Y2 = o.y2 ? v => (o.y2.log ? lg : lin)(v, o.y2.y, H - padB, padT) : null;
+  ctx.strokeStyle = c.line; ctx.fillStyle = c.ink; ctx.lineWidth = 1;
+  const yt = o.ylog ? logTicks(o.y[0], o.y[1]) : Array.from({ length: 5 }, (_, i) => o.y[0] + (o.y[1] - o.y[0]) * i / 4);
+  for (const v of yt) {
+    const y = Y(v); ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.textAlign = "right"; ctx.fillText((o.yfmt || short)(v), padL - 5, y + 4);
+  }
+  if (o.y2) {
+    const t2 = o.y2.log ? logTicks(o.y2.y[0], o.y2.y[1]) : Array.from({ length: 5 }, (_, i) => o.y2.y[0] + (o.y2.y[1] - o.y2.y[0]) * i / 4);
+    ctx.textAlign = "left"; for (const v of t2) ctx.fillText((o.y2.fmt || short)(v), W - padR + 5, Y2(v) + 4);
+  }
+  ctx.textAlign = "center";
+  const xt = o.xticks || Array.from({ length: 6 }, (_, i) => o.x[0] + (o.x[1] - o.x[0]) * i / 5);
+  for (const v of xt) ctx.fillText((o.xfmt || (d => Math.round(d) + "d"))(v), X(v), H - 7);
+  return { ctx, W, H, X, Y, Y2, c, padL, padR, padT, padB };
+}
+const legend = (id, items) => { $(id).innerHTML = items.map(([color, label, style]) =>
+  `<span><span class="sw" style="${style || "background:" + color}"></span>${label}</span>`).join(""); };
+const yearsFmt = d => (d / 365.25).toFixed(d < 3652 ? 1 : 0) + " yr";
+const rgba = (col, a) => { const m = col.match(/^#([0-9a-f]{6})$/i); if (!m) return col; const n = parseInt(m[1], 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+
+// ---- Average-model time charts ----
+let lastRun = null;
+function drawDetCharts(r, p) {
+  lastRun = { r, p };
+  setPyramid(r.pyr); drawLexis(r.pyr, p);
+  const rows = r.rows, last = rows[rows.length - 1], xmax = Math.max(1, last.day), c = cssVars();
+  // Herd makeup: 100% stacked area
+  const cats = [["bs", "breeding sows", rgba(c.acc, 0.95)], ["yf", "young sows", rgba(c.acc, 0.5)], ["rs", "retired sows", rgba(c.acc, 0.22)],
+    ["fb", "fertile boars", rgba(c.acc2, 0.9)], ["ym", "young males", rgba(c.acc2, 0.4)]];
+  {
+    const a = axes($("cMix"), { x: [0, xmax], y: [0, 1], yfmt: v => Math.round(v * 100) + "%", xfmt: yearsFmt });
+    const share = rows.map(row => { const t = Object.values(row.mix).reduce((x, y) => x + y, 0) || 1; return cats.map(([k]) => row.mix[k] / t); });
+    let base = rows.map(() => 0);
+    cats.forEach(([, , col], ci) => {
+      const top = base.map((b, i) => b + share[i][ci]);
+      a.ctx.fillStyle = col; a.ctx.beginPath();
+      rows.forEach((row, i) => i ? a.ctx.lineTo(a.X(row.day), a.Y(top[i])) : a.ctx.moveTo(a.X(row.day), a.Y(top[i])));
+      for (let i = rows.length - 1; i >= 0; i--) a.ctx.lineTo(a.X(rows[i].day), a.Y(base[i]));
+      a.ctx.closePath(); a.ctx.fill(); base = top;
+    });
+    legend("lMix", cats.map(([, l, col]) => [col, l]));
+    const t = Object.values(last.mix).reduce((x, y) => x + y, 0) || 1, pc = k => Math.round(100 * last.mix[k] / t) + "%";
+    $("nMix").textContent = `At the end: ${pc("bs")} breeding sows, ${pc("yf")} young sows, ${pc("rs")} retired, ` +
+      `${pc("fb")} fertile boars, ${pc("ym")} young males. Only the breeding sows produce litters.`;
+  }
+  // Losses by cause: 100% stacked bars per interval
+  const causes = [["pup", "pups lost at birth/early", rgba(c.acc, 0.95)], ["old", "pups lost: older sow", rgba(c.acc, 0.6)],
+    ["inb", "pups lost: inbreeding", rgba(c.acc, 0.3)], ["litter", "sows dying at a litter", rgba(c.acc2, 0.95)],
+    ["hb", "extra breeding-sow deaths", rgba(c.acc2, 0.55)], ["bg", "background deaths", c.ink]];
+  {
+    const a = axes($("cDeaths"), { x: [0, xmax], y: [0, 1], yfmt: v => Math.round(v * 100) + "%", xfmt: yearsFmt });
+    const tot = {}; causes.forEach(([k]) => tot[k] = 0);
+    for (let i = 1; i < rows.length; i++) {
+      const d = rows[i].deaths, sum = causes.reduce((x, [k]) => x + d[k], 0);
+      causes.forEach(([k]) => tot[k] += d[k]);
+      if (!(sum > 0)) continue;
+      const x0 = a.X(rows[i - 1].day) + 0.5, x1 = a.X(rows[i].day) - 0.5;
+      let acc = 0;
+      causes.forEach(([k, , col]) => { const h = d[k] / sum; a.ctx.fillStyle = col; a.ctx.globalAlpha = k === "bg" ? 0.35 : 1;
+        a.ctx.fillRect(x0, a.Y(acc + h), Math.max(1, x1 - x0), a.Y(acc) - a.Y(acc + h)); acc += h; });
+      a.ctx.globalAlpha = 1;
+    }
+    legend("lDeaths", causes.map(([k, l, col]) => [col, l, k === "bg" ? `background:${col};opacity:.35` : null]));
+    const all = Object.values(tot).reduce((x, y) => x + y, 0) || 1, pc = k => Math.round(100 * tot[k] / all) + "%";
+    $("nDeaths").textContent = `Over the whole run: ${pc("pup")} pups lost at birth or early, ${pc("old")} to older sows, ` +
+      `${pc("inb")} to inbreeding; sows at a litter ${pc("litter")}, extra breeding-sow deaths ${pc("hb")}, background ${pc("bg")}.`;
+  }
+  // Floor space and running cost
+  {
+    const area = rows.map(x => x.total * p.space), cum = rows.map(x => x.cum * p.cost / 30.44);
+    const amax = Math.max(...area, p.area || 0) * 1.3, cmax = Math.max(...cum, 1) * 1.3;
+    const a = axes($("cCost"), { x: [0, xmax], y: [Math.max(0.1, Math.min(...area) / 1.5), amax], ylog: true, xfmt: yearsFmt,
+      yfmt: v => short(v) + " m²", y2: { y: [Math.max(1, Math.min(...cum.filter(v => v > 0), 100) / 1.5), cmax], log: true, fmt: v => "$" + short(v) } });
+    a.ctx.strokeStyle = c.acc; a.ctx.lineWidth = 2; a.ctx.beginPath();
+    rows.forEach((row, i) => i ? a.ctx.lineTo(a.X(row.day), a.Y(area[i])) : a.ctx.moveTo(a.X(row.day), a.Y(area[i]))); a.ctx.stroke();
+    a.ctx.strokeStyle = c.acc2; a.ctx.setLineDash([5, 4]); a.ctx.beginPath(); let started = false;
+    rows.forEach((row, i) => { if (cum[i] <= 0) return; started ? a.ctx.lineTo(a.X(row.day), a.Y2(cum[i])) : a.ctx.moveTo(a.X(row.day), a.Y2(cum[i])); started = true; });
+    a.ctx.stroke(); a.ctx.setLineDash([]);
+    if (p.area > 0) { a.ctx.strokeStyle = c.text; a.ctx.lineWidth = 1; a.ctx.setLineDash([2, 3]); a.ctx.beginPath();
+      a.ctx.moveTo(a.padL, a.Y(p.area)); a.ctx.lineTo(a.W - a.padR, a.Y(p.area)); a.ctx.stroke(); a.ctx.setLineDash([]); }
+    legend("lCost", [[c.acc, "floor area needed (left)"], [c.acc2, "upkeep so far (right)", `border-top:2px dashed ${c.acc2};height:0`]]
+      .concat(p.area > 0 ? [[c.text, "floor area available", `border-top:2px dotted ${c.text};height:0`]] : []));
+    $("nCost").textContent = `Monthly upkeep tracks floor area: ${money(last.total * p.cost)} a month at ${Math.round(last.total * p.space).toLocaleString()} m². ` +
+      `Upkeep so far: ${money(cum[cum.length - 1])}.`;
+  }
+  drawTimeCharts();
+}
+
+// ---- Age-sex pyramid animation ----
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const pyrState = { frames: [], i: -1, playing: false, last: 0, shown: false };
+function setPyramid(frames) {
+  const atEnd = pyrState.i < 0 || pyrState.i >= pyrState.frames.length - 1;
+  pyrState.frames = frames;
+  const slider = $("pyrSlider"); slider.max = frames.length - 1;
+  pyrState.i = atEnd ? frames.length - 1 : Math.min(pyrState.i, frames.length - 1);
+  slider.value = pyrState.i;
+  drawPyramid();
+}
+function drawPyramid() {
+  const s = pyrState.frames[pyrState.i]; if (!s) return;
+  const p = lastRun ? lastRun.p : null;
+  const { ctx, W, H } = setup($("cPyr")), c = cssVars();
+  const mid = 52, padT = 44, padB = 24, half = (W - mid) / 2, rowH = (H - padT - padB) / PYR_BANDS;
+  // scale: the largest band share in this frame, rounded up to 5% so the axis doesn't jitter
+  const tot = Math.max(s.total, 1e-9), maxShare = Math.max(...[...s.fy].map((v, k) => (v + s.fb[k] + s.fr[k]) / tot), ...[...s.my].map((v, k) => (v + s.mf[k]) / tot));
+  const scale = Math.max(0.05, Math.ceil(maxShare * 20) / 20);
+  const share = v => v / tot, L = v => half * share(v) / scale;
+  ctx.font = "600 13px " + '"IBM Plex Mono", ui-monospace, monospace'; ctx.fillStyle = c.text; ctx.textAlign = "left";
+  ctx.fillText(`Day ${s.day.toLocaleString()} (${(s.day / 365.25).toFixed(1)} years): ${Math.round(s.total).toLocaleString()} pigs`, 0, 15);
+  ctx.font = "11px " + '"IBM Plex Mono", ui-monospace, monospace'; ctx.fillStyle = c.ink;
+  ctx.textAlign = "right"; ctx.fillText("males", half - 4, 34); ctx.textAlign = "left"; ctx.fillText("females", half + mid + 4, 34);
+  const segF = [["fb", rgba(c.acc, 0.95)], ["fy", rgba(c.acc, 0.5)], ["fr", rgba(c.acc, 0.22)]];
+  const segM = [["mf", rgba(c.acc2, 0.9)], ["my", rgba(c.acc2, 0.4)]];
+  let fTot = 0, mTot = 0;
+  for (let k = 0; k < PYR_BANDS; k++) {
+    const y = H - padB - (k + 1) * rowH, h = Math.max(1, rowH - 3);
+    let x = half + mid, fk = 0, mk = 0;
+    for (const [key, col] of segF) { const w = L(s[key][k]); ctx.fillStyle = col; ctx.fillRect(x, y, w, h); x += w; fTot += s[key][k]; fk += s[key][k]; }
+    const xf = x;
+    x = half; for (const [key, col] of segM) { const w = L(s[key][k]); ctx.fillStyle = col; ctx.fillRect(x - w, y, w, h); x -= w; mTot += s[key][k]; mk += s[key][k]; }
+    // share of the whole herd in this band, at the end of each bar
+    const pctLab = v => { const q = 100 * v / tot; return q >= 0.05 ? (q < 10 ? q.toFixed(1) : Math.round(q)) + "%" : ""; };
+    ctx.fillStyle = c.ink; ctx.font = "10.5px " + '"IBM Plex Mono", ui-monospace, monospace';
+    const fl = pctLab(fk), ml = pctLab(mk);
+    if (fl) { const out = xf + 4 + ctx.measureText(fl).width < W; ctx.textAlign = out ? "left" : "right"; ctx.fillStyle = out ? c.ink : c.bg; ctx.fillText(fl, out ? xf + 4 : xf - 4, y + h / 2 + 4); }
+    if (ml) { const out = x - 4 - ctx.measureText(ml).width > 0; ctx.textAlign = out ? "right" : "left"; ctx.fillStyle = out ? c.ink : c.bg; ctx.fillText(ml, out ? x - 4 : x + 4, y + h / 2 + 4); }
+    ctx.font = "11px " + '"IBM Plex Mono", ui-monospace, monospace';
+    ctx.fillStyle = c.ink; ctx.textAlign = "center";
+    const lab = k === PYR_BANDS - 1 ? "3 yr+" : k % 2 === 0 ? (k / 4).toFixed(k % 4 ? 1 : 0).replace(/\.0$/, "") + " yr" : "";
+    if (lab) ctx.fillText(lab, half + mid / 2, y + h / 2 + 4);
+  }
+  // share scale under each side
+  ctx.fillStyle = c.ink; ctx.strokeStyle = c.line;
+  for (const f of [0.5, 1]) {
+    const lbl = +(100 * scale * f).toFixed(1) + "%", dx = half * f;
+    ctx.textAlign = f === 1 ? "right" : "center"; ctx.fillText(lbl, half + mid + dx, H - 6);
+    ctx.textAlign = f === 1 ? "left" : "center"; ctx.fillText(lbl, half - dx, H - 6);
+  }
+  ctx.textAlign = "center"; ctx.fillText("0", half, H - 6); ctx.fillText("0", half + mid, H - 6);
+  legend("lPyr", [[rgba(c.acc, 0.95), "breeding sows"], [rgba(c.acc, 0.5), "young sows"], [rgba(c.acc, 0.22), "retired sows"],
+    [rgba(c.acc2, 0.9), "fertile boars"], [rgba(c.acc2, 0.4), "young males"]]);
+  $("nPyr").textContent = `Share of the herd in each three-month age band (labels mark where a band starts), from the average model. ` +
+    `Now ${Math.round(100 * mTot / Math.max(s.total, 1e-9))}% male. ` +
+    "Watch the founders age out at the top while each wave of litters enters at the bottom; the herd stays young because it keeps growing.";
+  $("pyrSlider").setAttribute("aria-valuetext", `Day ${s.day}`);
+}
+function pyrTick(now) {
+  if (!pyrState.playing) return;
+  if (now - pyrState.last > 85) {                         // about 12 frames a second
+    pyrState.last = now;
+    if (pyrState.i >= pyrState.frames.length - 1) { pyrStop(); return; }
+    pyrState.i++; $("pyrSlider").value = pyrState.i; drawPyramid();
+  }
+  requestAnimationFrame(pyrTick);
+}
+function pyrPlay() {
+  if (pyrState.i >= pyrState.frames.length - 1) pyrState.i = 0;
+  pyrState.playing = true; $("pyrPlay").textContent = "Pause"; $("pyrPlay").setAttribute("aria-label", "Pause the animation");
+  requestAnimationFrame(pyrTick);
+}
+function pyrStop() { pyrState.playing = false; $("pyrPlay").textContent = "Play"; $("pyrPlay").setAttribute("aria-label", "Play the animation"); }
+$("pyrPlay").onclick = () => pyrState.playing ? pyrStop() : pyrPlay();
+$("pyrSlider").oninput = e => { pyrStop(); pyrState.i = +e.target.value; drawPyramid(); };
+
+// ---- Lexis surface: time across, age up, colour = share of the herd (log scale) ----
+function drawLexis(frames, p) {
+  if (!frames.length) return;
+  lexNote();
+  if (lexMode === "3d") return drawLexis3d(frames, p);
+  const { ctx, W, H } = setup($("cLex")), c = cssVars();
+  const side = W >= 640, gap = side ? 44 : 40, padL = 40, padB = 24, padT = 20, padR = 20;
+  const pw = side ? (W - padL - padR - gap) / 2 : W - padL - padR;
+  const ph = side ? H - padT - padB : (H - 2 * padT - 2 * padB - 10) / 2;
+  const tMax = frames[frames.length - 1].day || 1, aMax = LEX_BINS * LEX_WIDTH;
+  const LO = -4, HI = 0;                                  // colour scale: 0.01% to 100% of the herd, log10
+  const panels = [
+    { key: "lf", title: "Females", col: c.acc, x0: padL, y0: padT,
+      lines: [[p.M, "first conception"]].concat(p.R > 0 ? [[p.R, "stop breeding"]] : []) },
+    { key: "lm", title: "Males", col: c.acc2, x0: side ? padL + pw + gap : padL, y0: side ? padT : padT + ph + padB + padT + 10,
+      lines: [[BOAR_MATURITY, "fertile"]] }];
+  for (const P of panels) {
+    const X = d => P.x0 + pw * d / tMax, Y = a => P.y0 + ph * (1 - a / aMax);
+    ctx.fillStyle = c.line; ctx.globalAlpha = 0.25; ctx.fillRect(P.x0, P.y0, pw, ph); ctx.globalAlpha = 1;
+    frames.forEach((s, i) => {
+      const x0 = X(i ? (frames[i - 1].day + s.day) / 2 : 0), x1 = X(i < frames.length - 1 ? (s.day + frames[i + 1].day) / 2 : s.day);
+      const tot = Math.max(s.total, 1e-9);
+      for (let k = 0; k < LEX_BINS; k++) {
+        const v = s[P.key][k] / tot; if (!(v > 0)) continue;
+        const t = Math.min(1, Math.max(0, (Math.log10(v) - LO) / (HI - LO)));
+        ctx.fillStyle = rgba(P.col, 0.08 + 0.92 * t);
+        ctx.fillRect(x0, Y((k + 1) * LEX_WIDTH), Math.max(1, x1 - x0 + 0.5), Math.max(1, Y(k * LEX_WIDTH) - Y((k + 1) * LEX_WIDTH) + 0.5));
+      }
+    });
+    // guide lines for life stages
+    ctx.setLineDash([4, 3]); ctx.strokeStyle = c.text; ctx.lineWidth = 1; ctx.fillStyle = c.text; ctx.textAlign = "right";
+    for (const [a, lab] of P.lines) if (a < aMax) {
+      ctx.beginPath(); ctx.moveTo(P.x0, Y(a)); ctx.lineTo(P.x0 + pw, Y(a)); ctx.stroke(); ctx.fillText(lab, P.x0 + pw - 3, Y(a) - 3);
+    }
+    ctx.setLineDash([]);
+    // axes
+    ctx.fillStyle = c.ink; ctx.textAlign = "right";
+    for (let yr = 0; yr <= 4; yr++) ctx.fillText(yr === 4 ? "4+ yr" : yr + " yr", P.x0 - 5, Y(yr * 365.25) + 4);
+    ctx.textAlign = "center";
+    for (let i = 0; i <= 4; i++) { const d = tMax * i / 4; ctx.fillText(yearsFmt(d), X(d), P.y0 + ph + 15); }
+    ctx.textAlign = "left"; ctx.fillStyle = c.text; ctx.font = "600 12px " + '"IBM Plex Mono", ui-monospace, monospace';
+    ctx.fillText(P.title + (side || P.key === "lf" ? "" : ""), P.x0, P.y0 - 6);
+    ctx.font = "11px " + '"IBM Plex Mono", ui-monospace, monospace';
+  }
+}
+function lexNote() {
+  const c = cssVars(), sw = (a, label) => [rgba(c.acc, a), label, `background:linear-gradient(90deg, ${rgba(c.acc, a)} 50%, ${rgba(c.acc2, a)} 50%)`];
+  legend("lLex", [sw(0.08, "0.01% of the herd"), sw(0.31, "0.1%"), sw(0.54, "1%"), sw(0.77, "10%"), sw(1, "100%")]);
+  $("nLex").textContent = lexMode === "3d"
+    ? "Time runs along one floor axis and age along the other; height and colour show each one-month age group's share of the herd " +
+      "(log scale). Each litter wave is a ridge running diagonally as those pigs age; the founders are the lone ridge at the leading edge. " +
+      "Drag to rotate, scroll or pinch to zoom, and hover for exact values. Dashed lines on the floor mark first conception and " +
+      "stopping breeding (sows) and fertility (boars)."
+    : "Each column is one moment (every 30 days), each row a one-month age group, coloured by its share of the herd " +
+      "on a log scale. Each litter wave shows as a diagonal streak as those pigs age; the leading diagonal at the top left is the founders. " +
+      "Shares above the dashed lines are sows of breeding age (or retired) and fertile boars.";
+}
+
+// ---- Lexis surface in 3D (Plotly, loaded the first time it's needed) ----
+const PLOTLY_URL = "https://cdn.jsdelivr.net/npm/plotly.js-gl3d-dist-min@2.35.2/plotly-gl3d.min.js";
+let lexMode = "3d", plotlyLoading = null;
+function loadPlotly() {
+  if (window.Plotly) return Promise.resolve();
+  if (!plotlyLoading) plotlyLoading = new Promise((res, rej) => {
+    const s = document.createElement("script"); s.src = PLOTLY_URL; s.onload = res; s.onerror = rej; document.head.appendChild(s);
+  });
+  return plotlyLoading;
+}
+function setLexMode(mode) {
+  lexMode = mode;
+  $("lex3dBtn").setAttribute("aria-pressed", mode === "3d"); $("lexFlatBtn").setAttribute("aria-pressed", mode === "flat");
+  $("lex3d").hidden = mode !== "3d"; $("cLex").hidden = mode !== "flat";
+  if (lastRun) drawLexis(lastRun.r.pyr, lastRun.p);
+}
+$("lex3dBtn").onclick = () => setLexMode("3d");
+$("lexFlatBtn").onclick = () => setLexMode("flat");
+
+function drawLexis3d(frames, p) {
+  if ($("p-time").hidden) return;                          // drawn when the tab is opened
+  const boxes = [$("lexF3d"), $("lexM3d")];
+  if (!window.Plotly) boxes.forEach(b => { if (!b.querySelector(".msg")) b.innerHTML = '<div class="msg">Loading the 3D view…</div>'; });
+  loadPlotly().then(() => {
+    const c = cssVars(), font = '"IBM Plex Mono", ui-monospace, monospace';
+    const x = frames.map(s => s.day / 365.25);
+    const y = Array.from({ length: LEX_BINS }, (_, k) => (k + 0.5) * LEX_WIDTH / 365.25);
+    const LO = -4;
+    const ticks = { tickvals: [-4, -3, -2, -1, 0], ticktext: ["0.01%", "0.1%", "1%", "10%", "100%"] };
+    const ax = (title, extra) => ({ title: { text: title, font: { size: 11 } }, color: c.ink, gridcolor: c.line, zerolinecolor: c.line,
+      backgroundcolor: "rgba(0,0,0,0)", showbackground: false, tickfont: { size: 10 }, ...extra });
+    [["lf", "Females", c.acc, boxes[0], [[p.M, "first conception"]].concat(p.R > 0 ? [[p.R, "stop breeding"]] : [])],
+     ["lm", "Males", c.acc2, boxes[1], [[BOAR_MATURITY, "fertile"]]]].forEach(([key, title, col, box, lines]) => {
+      const z = [], text = [];
+      for (let k = 0; k < LEX_BINS; k++) {
+        z.push(frames.map(s => { const v = s[key][k] / Math.max(s.total, 1e-9); return v > 0 ? Math.max(LO, Math.log10(v)) : null; }));
+        text.push(frames.map(s => { const v = 100 * s[key][k] / Math.max(s.total, 1e-9);
+          return `day ${s.day.toLocaleString()}, age ${k === LEX_BINS - 1 ? "4+ yr" : (k * LEX_WIDTH) + "–" + ((k + 1) * LEX_WIDTH) + " d"}<br>${v < 0.01 ? v.toExponential(1) : v.toFixed(v < 1 ? 2 : 1)}% of the herd`; }));
+      }
+      const data = [{ type: "surface", x, y, z, text, hoverinfo: "text", showscale: false, cmin: LO, cmax: 0,
+        colorscale: [[0, rgba(col, 0.1)], [0.5, rgba(col, 0.55)], [1, col]],
+        contours: { z: { show: false } }, lighting: { ambient: 0.85, diffuse: 0.5, specular: 0.05, roughness: 0.9 } }];
+      for (const [a, lab] of lines) data.push({ type: "scatter3d", mode: "lines+text", x: [0, x[x.length - 1]], y: [a / 365.25, a / 365.25], z: [LO, LO],
+        line: { color: c.text, width: 3, dash: "dash" }, text: ["", lab], textposition: "top left", textfont: { color: c.text, size: 10 }, hoverinfo: "skip", showlegend: false });
+      const layout = {
+        title: { text: title, x: 0.02, y: 0.97, font: { family: font, size: 13, color: c.text } },
+        paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", margin: { l: 10, r: 10, t: 26, b: 0 },
+        font: { family: font, color: c.ink },
+        scene: { xaxis: ax("time (years)"), yaxis: ax("age (years)", { range: [0, LEX_BINS * LEX_WIDTH / 365.25] }),
+          zaxis: ax("", { ...ticks, range: [LO, 0] }),           // tick labels already say "% of herd"
+          // viewed from the young-age, early-time corner: the decline with age and the diagonal litter ridges both show
+          camera: { eye: { x: 1.9, y: -1.3, z: 0.9 }, center: { x: 0, y: 0, z: -0.1 } }, aspectratio: { x: 1.5, y: 1, z: 0.75 } },
+        showlegend: false
+      };
+      const msg = box.querySelector(".msg"); if (msg) msg.remove();
+      Plotly.react(box, data, layout, { displaylogo: false, responsive: true, modeBarButtonsToRemove: ["toImage", "resetCameraLastSave3d"] });
+    });
+  }).catch(() => {
+    boxes.forEach(b => b.innerHTML = '<div class="msg">The 3D view needs an internet connection. Showing the flat view instead.</div>');
+    setTimeout(() => setLexMode("flat"), 1500);
+  });
+}
+
+// Charts that combine the average model with Monte Carlo trajectories (inbreeding, fan).
+function trajQuantiles(chunks, G, qs, cap) {
+  const out = qs.map(() => new Float64Array(G)), n = chunks.reduce((a, x) => a + x.length / G, 0);
+  if (!n) return null;
+  const col = new Float64Array(n);
+  for (let k = 0; k < G; k++) {
+    let i = 0; for (const ch of chunks) for (let r = 0; r < ch.length / G; r++) col[i++] = Math.min(ch[r * G + k], cap);
+    col.sort(); qs.forEach((q, j) => out[j][k] = pct(col, q));
+  }
+  return { out, n };
+}
+function drawTimeCharts() {
+  if (!lastRun) return;
+  const { r, p } = lastRun, rows = r.rows, c = cssVars();
+  const haveMC = mc && mc.tF.length && mc.G;
+  // Inbreeding
+  {
+    const qF = haveMC ? trajQuantiles(mc.tF, mc.G, [0.1, 0.5, 0.9], 1) : null;
+    const xmax = Math.max(rows[rows.length - 1].day, 1);
+    const fmax = Math.max(0.05, ...rows.map(x => x.F), ...(qF ? qF.out[2] : [0])) * 1.15;
+    const a = axes($("cInb"), { x: [0, xmax], y: [0, fmax], yfmt: v => v.toFixed(2), xfmt: yearsFmt,
+      y2: { y: [0, fmax], fmt: v => "×" + Math.exp(-p.B / 2 * v).toFixed(2) } });   // right labels: survival factor at that F
+    if (qF) {
+      const step = mc.trajStep, K = qF.out[0].length, kmax = Math.min(K, Math.floor(xmax / step) + 1);
+      a.ctx.fillStyle = rgba(c.acc, 0.18); a.ctx.beginPath();
+      for (let k = 0; k < kmax; k++) k ? a.ctx.lineTo(a.X(k * step), a.Y(qF.out[2][k])) : a.ctx.moveTo(a.X(0), a.Y(qF.out[2][0]));
+      for (let k = kmax - 1; k >= 0; k--) a.ctx.lineTo(a.X(k * step), a.Y(qF.out[0][k]));
+      a.ctx.closePath(); a.ctx.fill();
+      a.ctx.strokeStyle = c.acc; a.ctx.lineWidth = 1.5; a.ctx.beginPath();
+      for (let k = 0; k < kmax; k++) k ? a.ctx.lineTo(a.X(k * step), a.Y(qF.out[1][k])) : a.ctx.moveTo(a.X(0), a.Y(qF.out[1][0]));
+      a.ctx.stroke();
+    }
+    a.ctx.strokeStyle = c.acc2; a.ctx.lineWidth = 2; a.ctx.setLineDash([5, 4]); a.ctx.beginPath();
+    rows.forEach((row, i) => i ? a.ctx.lineTo(a.X(row.day), a.Y(row.F)) : a.ctx.moveTo(a.X(row.day), a.Y(row.F)));
+    a.ctx.stroke(); a.ctx.setLineDash([]);
+    legend("lInb", [[c.acc2, "average model", `border-top:2px dashed ${c.acc2};height:0`]].concat(qF ? [[c.acc, "Monte Carlo median"], [rgba(c.acc, 0.25), "middle 80% of runs"]] : []));
+    const fEnd = rows[rows.length - 1].F;
+    $("nInb").textContent = `Inbreeding F of pups born now (left) and the pup-survival factor it causes (right). ` +
+      `At the end F ≈ ${fEnd.toFixed(2)}, cutting pup survival to ×${Math.exp(-p.B / 2 * fEnd).toFixed(2)}. ` +
+      (p.B > 0 ? "Most of it builds while the herd is tiny, in the first two or three generations." : "Inbreeding load is set to 0, so it has no effect.");
+  }
+  // Fan chart of herd size
+  if (!haveMC) {
+    const { ctx, W } = setup($("cFan")); ctx.fillStyle = c.ink; ctx.fillText("Appears after a Monte Carlo run.", 10, 20);
+    $("lFan").innerHTML = ""; $("nFan").textContent = ""; return;
+  }
+  {
+    const N = mc.p.N, qA = trajQuantiles(mc.tAlive, mc.G, [0.1, 0.25, 0.5, 0.75, 0.9], N);
+    const step = mc.trajStep, K = qA.out[0].length;
+    // show up to the 99th-percentile finish among luck-only runs (failed runs never finish, so don't wait for them)
+    const okL = Float64Array.from(mc.luck.days).sort(), end = okL.length ? pct(okL, 0.99) : (K - 1) * step;
+    const kmax = Math.min(K, Math.ceil(Math.max(end, mc.det.hit || 0) * 1.05 / step) + 1);
+    const xmax = (kmax - 1) * step;
+    const a = axes($("cFan"), { x: [0, xmax], y: [1, N * 1.5], ylog: true, xfmt: yearsFmt });
+    const band = (lo, hi, alpha) => {
+      a.ctx.fillStyle = rgba(c.acc, alpha); a.ctx.beginPath();
+      for (let k = 0; k < kmax; k++) k ? a.ctx.lineTo(a.X(k * step), a.Y(Math.max(1, hi[k]))) : a.ctx.moveTo(a.X(0), a.Y(Math.max(1, hi[0])));
+      for (let k = kmax - 1; k >= 0; k--) a.ctx.lineTo(a.X(k * step), a.Y(Math.max(1, lo[k])));
+      a.ctx.closePath(); a.ctx.fill();
+    };
+    band(qA.out[0], qA.out[4], 0.15); band(qA.out[1], qA.out[3], 0.25);
+    a.ctx.strokeStyle = c.acc; a.ctx.lineWidth = 2; a.ctx.beginPath();
+    for (let k = 0; k < kmax; k++) k ? a.ctx.lineTo(a.X(k * step), a.Y(Math.max(1, qA.out[2][k]))) : a.ctx.moveTo(a.X(0), a.Y(Math.max(1, qA.out[2][0])));
+    a.ctx.stroke();
+    a.ctx.strokeStyle = c.acc2; a.ctx.setLineDash([5, 4]); a.ctx.beginPath();
+    mc.det.rows.filter(x => x.day <= xmax).forEach((row, i) => i ? a.ctx.lineTo(a.X(row.day), a.Y(Math.max(1, row.total))) : a.ctx.moveTo(a.X(row.day), a.Y(Math.max(1, row.total))));
+    a.ctx.stroke(); a.ctx.setLineDash([]);
+    a.ctx.strokeStyle = c.text; a.ctx.lineWidth = 1; a.ctx.setLineDash([2, 3]); a.ctx.beginPath();
+    a.ctx.moveTo(a.padL, a.Y(N)); a.ctx.lineTo(a.W - a.padR, a.Y(N)); a.ctx.stroke(); a.ctx.setLineDash([]);
+    legend("lFan", [[c.acc, "median"], [rgba(c.acc, 0.4), "middle 50%"], [rgba(c.acc, 0.15), "middle 80%"],
+      [c.acc2, "average model", `border-top:2px dashed ${c.acc2};height:0`]]);
+    $("nFan").textContent = `${qA.n.toLocaleString()} luck-only runs. Runs that reach N are held at N; runs that die out drop to 0, ` +
+      `which pulls the lower band down. The spread opens in the first generation, when a handful of pigs decides the herd's fate.`;
+  }
+}
+
+// ---- Monte Carlo summary charts ----
+function drawCdf(L, U, detDay) {
+  const c = cssVars(), S = U || L, sets = U ? [[U, c.acc, "luck + input uncertainty"], [L, c.text, "luck only"]] : [[L, c.acc, "luck only"]];
+  const xmax = Math.max(1, ...sets.map(([s]) => s.ok.length ? pct(s.ok, 0.99) : 0), detDay || 0) * 1.08;   // a few extreme runs would squash the plot
+  const a = axes($("cCdf"), { x: [0, xmax], y: [0, 1], yfmt: v => Math.round(v * 100) + "%", xfmt: yearsFmt });
+  sets.forEach(([s, col]) => {
+    a.ctx.strokeStyle = col; a.ctx.lineWidth = col === c.acc ? 2.2 : 1.5; a.ctx.beginPath(); a.ctx.moveTo(a.X(0), a.Y(0));
+    const n = s.n, step = Math.max(1, Math.floor(s.ok.length / 800));
+    for (let i = 0; i < s.ok.length; i += step) { a.ctx.lineTo(a.X(s.ok[i]), a.Y(i / n)); a.ctx.lineTo(a.X(s.ok[i]), a.Y((i + 1) / n)); }
+    a.ctx.lineTo(a.X(xmax), a.Y(s.ok.length / n)); a.ctx.stroke();
+  });
+  if (detDay !== null) { a.ctx.strokeStyle = c.acc2; a.ctx.setLineDash([5, 4]); a.ctx.beginPath(); a.ctx.moveTo(a.X(detDay), a.padT); a.ctx.lineTo(a.X(detDay), a.H - a.padB); a.ctx.stroke(); a.ctx.setLineDash([]); }
+  legend("lCdf", sets.map(([, col, l]) => [col, l]).concat(detDay !== null ? [[c.acc2, "average model", `border-top:2px dashed ${c.acc2};height:0`]] : []));
+  const top = S.ok.length / S.n;
+  const at = q => { const i = Math.ceil(q * S.n) - 1;
+    return i < S.ok.length ? `${Math.round(q * 100)}% by ${(S.ok[i] / 365.25).toFixed(1)} years (${Math.round(S.ok[i]).toLocaleString()} days)` : null; };
+  const parts = [0.5, 0.8, 0.9].map(at).filter(Boolean);
+  $("nCdf").textContent = `Counting failed runs as never: ` + (parts.length ? parts.join(", ") + ". " : "") +
+    `The curve tops out at ${Math.round(100 * top)}%, the share of runs that ever get there` +
+    (top < 0.9 ? `, so a ${top < 0.5 ? "50" : top < 0.8 ? "80" : "90"}% chance is never reached.` : ".");
+}
+function drawConv() {
+  const c = cssVars(), pts = mc.conv;
+  if (pts.length < 2) return;
+  const lo = Math.min(...pts.map(x => x.p10)), hi = Math.max(...pts.map(x => x.p90));
+  const pad = (hi - lo) * 0.1 + 5;
+  const a = axes($("cConv"), { x: [Math.log10(pts[0].n), Math.log10(pts[pts.length - 1].n)], y: [lo - pad, hi + pad],
+    xfmt: v => short(Math.round(Math.pow(10, v))), yfmt: v => Math.round(v).toLocaleString() });
+  [["p10", c.acc2], ["med", c.acc], ["p90", c.acc2]].forEach(([k, col]) => {
+    a.ctx.strokeStyle = col; a.ctx.lineWidth = k === "med" ? 2.2 : 1.5; a.ctx.beginPath();
+    pts.forEach((pt, i) => i ? a.ctx.lineTo(a.X(Math.log10(pt.n)), a.Y(pt[k])) : a.ctx.moveTo(a.X(Math.log10(pt.n)), a.Y(pt[k])));
+    a.ctx.stroke();
+  });
+  legend("lConv", [[c.acc, "median days"], [c.acc2, "10th and 90th percentiles"]]);
+  const fin = pts[pts.length - 1], half = pts.find(x => x.n >= fin.n / 2) || pts[0];
+  const settle = pts.find(pt => Math.abs(pt.med - fin.med) <= 0.01 * fin.med && pts.filter(q => q.n >= pt.n).every(q => Math.abs(q.med - fin.med) <= 0.01 * fin.med));
+  $("nConv").textContent = `Estimates as runs accumulate (log scale). The median moved ${Math.abs(fin.med - half.med).toFixed(0)} days over ` +
+    `the last half of the runs` + (settle ? ` and has stayed within 1% of its final value since about ${settle.n.toLocaleString()} runs.` : ".");
+}
+
+// ---- Founders chart ----
+function drawFounders() {
+  if (!fd) return;
+  const c = cssVars(), zs = fd.sizes.filter(z => z.done > 0);
+  if (!zs.length) return;
+  $("fdempty").hidden = true;
+  const stats = zs.map(z => { const s = Float64Array.from(z.days).sort();
+    return { n: z.n, med: s.length ? pct(s, 0.5) : null, p10: s.length ? pct(s, 0.1) : null, p90: s.length ? pct(s, 0.9) : null,
+      fail: z.fail / z.done, det: z.det.hit, done: z.done }; });
+  const vals = stats.flatMap(s => [s.p10, s.p90, s.det]).filter(v => v !== null);
+  const a = axes($("cFounders"), { x: [Math.log10(2), Math.log10(40)], y: [0, Math.max(...vals, 1) * 1.08],
+    xticks: FOUNDERS.map(Math.log10), xfmt: v => String(Math.round(Math.pow(10, v))), yfmt: v => Math.round(v).toLocaleString(),
+    y2: { y: [0, Math.max(0.2, ...stats.map(s => s.fail)) * 1.1], fmt: v => Math.round(v * 100) + "%" } });
+  stats.forEach(s => { const x = a.X(Math.log10(s.n)); a.ctx.fillStyle = rgba(c.acc2, 0.35);
+    a.ctx.fillRect(x - 6, a.Y2(s.fail), 12, a.Y2(0) - a.Y2(s.fail)); });
+  const ok = stats.filter(s => s.med !== null);
+  a.ctx.fillStyle = rgba(c.acc, 0.18); a.ctx.beginPath();
+  ok.forEach((s, i) => i ? a.ctx.lineTo(a.X(Math.log10(s.n)), a.Y(s.p90)) : a.ctx.moveTo(a.X(Math.log10(s.n)), a.Y(s.p90)));
+  for (let i = ok.length - 1; i >= 0; i--) a.ctx.lineTo(a.X(Math.log10(ok[i].n)), a.Y(ok[i].p10));
+  a.ctx.closePath(); a.ctx.fill();
+  a.ctx.strokeStyle = c.acc; a.ctx.lineWidth = 2; a.ctx.beginPath();
+  ok.forEach((s, i) => i ? a.ctx.lineTo(a.X(Math.log10(s.n)), a.Y(s.med)) : a.ctx.moveTo(a.X(Math.log10(s.n)), a.Y(s.med))); a.ctx.stroke();
+  a.ctx.fillStyle = c.acc; ok.forEach(s => { a.ctx.beginPath(); a.ctx.arc(a.X(Math.log10(s.n)), a.Y(s.med), 3, 0, 7); a.ctx.fill(); });
+  a.ctx.strokeStyle = c.text; a.ctx.lineWidth = 1.2; a.ctx.setLineDash([4, 3]); a.ctx.beginPath(); let st = false;
+  stats.forEach(s => { if (s.det === null) return; st ? a.ctx.lineTo(a.X(Math.log10(s.n)), a.Y(s.det)) : a.ctx.moveTo(a.X(Math.log10(s.n)), a.Y(s.det)); st = true; });
+  a.ctx.stroke(); a.ctx.setLineDash([]);
+  legend("lFounders", [[c.acc, "median days (Monte Carlo)"], [rgba(c.acc, 0.25), "middle 80% of runs"],
+    [c.text, "average model", `border-top:2px dashed ${c.text};height:0`], [rgba(c.acc2, 0.5), "runs that never reach N (right)"]]);
+  const done = fd.sizes.reduce((x, z) => x + z.done, 0), all = fd.sizes.length * fd.each;
+  const safe = stats.find(s => s.fail < 0.01 && s.done >= 50);
+  const best = ok.length ? ok[ok.length - 1] : null, near = best ? ok.find(s => s.med <= best.med * 1.1) : null;
+  $("fdnote").textContent = (fd.running ? `Running: ${done.toLocaleString()} of ${all.toLocaleString()} runs. ` : `${done.toLocaleString()} runs in ${(fd.secs || 0).toFixed(0)} s${fd.stopped ? " (stopped early)" : ""}. `) +
+    (safe ? `Failure risk drops below 1% from about ${safe.n} founders. ` : "") +
+    (near && best ? `From ${near.n} founders the median is within 10% of the ${best.n}-founder result; beyond that, extra pigs buy little time.` : "");
+}
+
+// ---- Sensitivity (tornado) ----
+const SENS = [
+  ["L", "Litter size"], ["s", "Pup survival"], ["I", "Days between litters"], ["M", "Age at first conception"],
+  ["rho1", "First-litter size"], ["d", "Sow death risk per litter"], ["hb", "Extra deaths, breeding sows"],
+  ["ms", "Adult mortality (all ages)"], ["B", "Inbreeding load"], ["area", "Floor area"], ["g", "Gestation"]
+];
+function sensitivity(p, base) {
+  if (base.hit === null) return drawTornado([], null);
+  const out = [];
+  for (const [k, label] of SENS) {
+    if (!((p[k] ?? 0) > 0)) continue;
+    if (k === "ms" && p.mort === "flat" && p.m === 0) continue;
+    const vals = [0.9, 1.1].map(fct => {
+      const q = { ...p, [k]: p[k] * fct };
+      if (k === "I" || k === "M" || k === "g") q[k] = Math.round(q[k]);
+      if (k === "g") q.I = Math.max(q.I, q.g);
+      if (k === "I") q.I = Math.max(q.I, q.g);
+      if (k === "s") { q.s = Math.min(1, q.s); q.w = Math.min(q.w, 1 - q.s); }
+      if (k === "hb") q.hb = Math.min(0.99, q.hb);
+      if (k === "d") q.d = Math.min(1, q.d);
+      if (k === "rho1") q.rho1 = Math.min(3, q.rho1);
+      return simulate(q).hit;
+    });
+    out.push({ label, lo: vals[0], hi: vals[1] });
+  }
+  drawTornado(out, base.hit);
+}
+function drawTornado(items, baseDay) {
+  const { ctx, W, H } = setup($("tornado")), c = cssVars();
+  if (baseDay === null) { ctx.fillStyle = c.ink; ctx.fillText("The herd doesn't reach N with these inputs, so there is nothing to compare.", 8, 20); return; }
+  if (!items.length) return;
+  const BIG = 1e9, v = x => x === null ? BIG : x;
+  items.sort((a, b) => Math.abs(v(b.hi) - v(b.lo)) - Math.abs(v(a.hi) - v(a.lo)));
+  const finite = items.flatMap(i => [i.lo, i.hi]).filter(x => x !== null);
+  let lo = Math.min(baseDay, ...finite), hi = Math.max(baseDay, ...finite);
+  const pad = Math.max(10, (hi - lo) * 0.08); lo -= pad; hi += pad;
+  const padL = Math.min(190, W * 0.42), padR = 12, padT = 8, padB = 24;
+  const rowH = (H - padT - padB) / items.length;
+  const X = d => padL + (W - padL - padR) * (Math.min(Math.max(d, lo), hi) - lo) / (hi - lo);
+  ctx.strokeStyle = c.line; ctx.fillStyle = c.ink; ctx.textAlign = "center";
+  for (let i = 0; i <= 4; i++) {
+    const d = lo + (hi - lo) * i / 4;
+    ctx.beginPath(); ctx.moveTo(X(d), padT); ctx.lineTo(X(d), H - padB); ctx.stroke();
+    ctx.fillText(Math.round(d) + "d", X(d), H - 8);
+  }
+  items.forEach((it, i) => {
+    const y = padT + i * rowH, bh = Math.max(6, rowH * 0.55), yy = y + (rowH - bh) / 2;
+    ctx.fillStyle = c.text; ctx.textAlign = "right"; ctx.fillText(it.label, padL - 8, y + rowH / 2 + 4);
+    for (const [val, col] of [[it.lo, c.acc2], [it.hi, c.acc]]) {
+      const x0 = X(baseDay), x1 = val === null ? W - padR : X(val);
+      ctx.fillStyle = col; ctx.fillRect(Math.min(x0, x1), yy, Math.max(1.5, Math.abs(x1 - x0)), bh);
+      if (val === null) { ctx.fillStyle = c.text; ctx.textAlign = "right"; ctx.fillText("never", W - padR - 2, yy + bh - 1); }
+    }
+  });
+  ctx.strokeStyle = c.text; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(X(baseDay), padT); ctx.lineTo(X(baseDay), H - padB); ctx.stroke();
+}
+
+// ---- Monte Carlo driver ----
+// Runs are spread over Web Workers (one per spare CPU core) and stream back in batches, so the
+// histogram fills in live and Stop keeps whatever has finished. Falls back to the main thread if
+// workers are unavailable.
+let mc = null;
+const MORT_RUNS = 20000;                   // luck-only runs that also record deaths by age
+function newSet() { return { days: [], n: 0, ext: 0, boar: 0, plat: 0, hor: 0 }; }
+function mcMessage(msg) {
+  mc = null;
+  $("mcout").hidden = true; $("mcempty").hidden = false;
+  $("mcmsg").textContent = msg;
+}
+function makeWorker() {
+  const src = $("sim").textContent + `
+onmessage = e => {
+  const r = runBatch(e.data), t = [r.res.buffer, r.deaths.buffer, r.expo.buffer];
+  for (const k of ["perRun", "tAlive", "tF"]) if (r[k]) t.push(r[k].buffer);
+  postMessage({ ...r, job: e.data }, t);
+};`;
+  return new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+}
+
+// A pool of workers (one per spare core) pulling jobs from nextJob() until it returns null.
+// Falls back to the main thread if workers can't be created or fail.
+let activePool = null;
+function startPool(nextJob, onResult, onDone) {
+  const pool = { workers: [], running: true };
+  pool.stop = () => { pool.running = false; pool.workers.forEach(w => w.terminate()); pool.workers = []; if (activePool === pool) activePool = null; };
+  const cores = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
+  try { for (let i = 0; i < cores; i++) pool.workers.push(makeWorker()); } catch (e) { pool.workers = []; }
+  pool.size = Math.max(1, pool.workers.length);
+  const finish = () => { if (!pool.running) return; pool.stop(); onDone(); };
+  const safe = r => { try { onResult(r); } catch (e) { console.error(e); } };
+  const mainLoop = () => {
+    if (!pool.running) return;
+    const job = nextJob(); if (!job) return finish();
+    safe({ ...runBatch(job), job }); setTimeout(mainLoop);
+  };
+  const send = w => {
+    const job = nextJob();
+    if (job) { w.busy = true; w.postMessage(job); }
+    else { w.busy = false; if (!pool.workers.some(x => x.busy)) finish(); }
+  };
+  if (pool.workers.length) pool.workers.forEach(w => {
+    w.onmessage = e => { if (!pool.running) return; safe(e.data); send(w); };
+    w.onerror = () => { pool.workers.forEach(x => x.terminate()); pool.workers = []; pool.size = 1; mainLoop(); };
+    send(w);
+  });
+  else setTimeout(mainLoop);
+  activePool = pool;
+  return pool;
+}
+// Batch size aiming at ~0.3 s per batch so progress stays smooth.
+const nextBatch = (runs, secs, size) => Math.max(1, Math.min(2000, Math.round(0.3 / Math.max(secs / Math.max(runs, 1) * size, 1e-5))));
+const horizonFor = det => Math.min(20000, det.hit !== null ? Math.max(3 * det.hit, det.hit + 2000) : 20000);
+
+const TRAJ_RUNS = 10000;                   // luck-only runs that also record herd size and inbreeding over time
+$("mcgo").onclick = () => {
+  if (mc && mc.running) { mc.pool.stop(); return mcFinish(true); }
+  if (activePool) return mcMessage("The founders analysis is running; stop it first.");
+  const v = sanitize();
+  if (v.error) return mcMessage(v.error);
+  const p = v.p, u = Math.min(0.9, Math.max(0, (+$("u").value || 0) / 100));
+  if (p.N > 300000) return mcMessage("Target too large to simulate pig by pig in the browser; keep N ≤ 300,000.");
+  const total = Math.min(1e6, Math.max(50, Math.round(+$("runs").value || 100000)));
+  const det = simulate(p), H = horizonFor(det);
+  const target = u > 0 ? { luck: Math.ceil(total / 2), unc: Math.floor(total / 2) } : { luck: total, unc: 0 };
+  mc = { p, u, det, H, target, running: true, t0: performance.now(), dispatched: { luck: 0, unc: 0 },
+    luck: newSet(), unc: newSet(), mortDeaths: new Float64Array(LIFE_Q.length + 2), mortExpo: new Float64Array(LIFE_Q.length + 2),
+    perRun: [], mortRuns: 0, batch: 10, lastDraw: 0, conv: [],
+    trajStep: Math.max(30, Math.ceil(H / 300)), trajRuns: 0, tAlive: [], tF: [] };
+  $("mcgo").textContent = "Stop";
+  mc.pool = startPool(nextJob, absorb, () => mcFinish(false));
+};
+
+// Next batch of runs; alternates the two sets so both fill in at the same pace.
+function nextJob() {
+  const m = mc, left = s => m.target[s] - m.dispatched[s];
+  if (left("luck") <= 0 && left("unc") <= 0) return null;
+  const set = left("unc") > 0 && (m.dispatched.unc < m.dispatched.luck || left("luck") <= 0) ? "unc" : "luck";
+  const count = Math.min(m.batch, left(set));
+  m.dispatched[set] += count;
+  const collect = set === "luck" && m.mortRuns < MORT_RUNS;
+  if (collect) m.mortRuns += count;
+  const traj = set === "luck" && m.trajRuns < TRAJ_RUNS;
+  if (traj) m.trajRuns += count;
+  return { p: m.p, H: m.H, u: set === "unc" ? m.u : 0, count, collect, trajStep: traj ? m.trajStep : 0, set };
+}
+function absorb(r) {
+  if (!mc || !mc.running) return;
+  const s = mc[r.job.set];
+  for (const v of r.res) {
+    s.n++;
+    if (v >= 0) s.days.push(v); else if (v === -1) s.ext++; else if (v === -2) s.boar++; else if (v === -3) s.plat++; else s.hor++;
+  }
+  if (r.perRun) {
+    for (let k = 0; k < mc.mortDeaths.length; k++) { mc.mortDeaths[k] += r.deaths[k]; mc.mortExpo[k] += r.expo[k]; }
+    mc.perRun.push(r.perRun);
+  }
+  if (r.tAlive) { mc.tAlive.push(r.tAlive); mc.tF.push(r.tF); mc.G = r.G; }
+  mc.batch = nextBatch(mc.luck.n + mc.unc.n, (performance.now() - mc.t0) / 1000, mc.pool.size);
+  if (performance.now() - mc.lastDraw > 700) {
+    mc.lastDraw = performance.now();
+    try { showMC(); } catch (e) { console.error(e); }   // a drawing problem must never stall the runs
+  }
+}
+function mcFinish(stopped) {
+  if (!mc) return;
+  mc.running = false; mc.stopped = stopped;
+  mc.secs = (performance.now() - mc.t0) / 1000;
+  $("mcgo").textContent = "Run";
+  showMC(); drawMort(); drawTimeCharts();
+  if (lastRun) updateHeadline(lastRun.r, lastRun.p);
+}
+
+// ---- Founders analysis: Monte Carlo across starting herd sizes ----
+const FOUNDERS = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 30, 40];
+let fd = null;
+$("fdgo").onclick = () => {
+  if (fd && fd.running) { fd.pool.stop(); return fdFinish(true); }
+  if (activePool) { $("fdnote").textContent = "The Monte Carlo above is running; stop it first."; return; }
+  const v = sanitize();
+  if (v.error) { $("fdnote").textContent = v.error; return; }
+  const p = v.p, each = Math.min(20000, Math.max(20, Math.round(+$("fdruns").value || 500)));
+  fd = { p, each, running: true, t0: performance.now(), batch: 5, lastDraw: 0, i: 0, sizes: FOUNDERS.map(n => {
+    const q = { ...p, n }, det = simulate(q);
+    return { n, q, det, H: horizonFor(det), dispatched: 0, done: 0, days: [], fail: 0 };
+  }) };
+  $("fdgo").textContent = "Stop";
+  fd.pool = startPool(() => {
+    const open = fd.sizes.filter(z => z.dispatched < fd.each);
+    if (!open.length) return null;
+    const z = open[fd.i++ % open.length], count = Math.min(fd.batch, fd.each - z.dispatched);
+    z.dispatched += count;
+    return { p: z.q, H: z.H, u: 0, count, collect: false, trajStep: 0, set: z.n };
+  }, r => {
+    const z = fd.sizes.find(x => x.n === r.job.set);
+    for (const v of r.res) { z.done++; if (v >= 0) z.days.push(v); else z.fail++; }
+    const done = fd.sizes.reduce((a, x) => a + x.done, 0);
+    fd.batch = nextBatch(done, (performance.now() - fd.t0) / 1000, fd.pool.size);
+    if (performance.now() - fd.lastDraw > 700) { fd.lastDraw = performance.now(); drawFounders(); }
+  }, () => fdFinish(false));
+};
+function fdFinish(stopped) {
+  fd.running = false; fd.stopped = stopped; fd.secs = (performance.now() - fd.t0) / 1000;
+  $("fdgo").textContent = "Run"; drawFounders();
+}
+
+function pct(a, q) { const i = (a.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i); return a[lo] + (a[hi] - a[lo]) * (i - lo); }
+function summarize(s) { return { ...s, ok: Float64Array.from(s.days).sort() }; }
+
+function showMC() {
+  if (!mc) return;
+  const { u, det, H } = mc, f = x => Math.round(x).toLocaleString();
+  const L = summarize(mc.luck), U = mc.unc.n ? summarize(mc.unc) : null, S = U || L;
+  const done = mc.luck.n + mc.unc.n, totalRuns = mc.target.luck + mc.target.unc;
+  const secs = mc.running ? (performance.now() - mc.t0) / 1000 : mc.secs;
+  const eta = mc.running && done > 0 ? secs / done * (totalRuns - done) : 0;
+  const reduced = mc.stopped ? " (stopped early)" : "";
+  const secsTxt = s => s < 90 ? `${s.toFixed(0)} s` : `${(s / 60).toFixed(1)} min`;
+  if (mc.running) $("mcgo").textContent = `Stop (${Math.round(100 * done / totalRuns)}%, ~${secsTxt(eta)} left)`;
+  if (mc.running) drawMort();
+  if (!S.n) return;
+  $("mcempty").hidden = true; $("mcout").hidden = false;
+  const ok = S.ok;
+  $("sMed").textContent = ok.length ? f(pct(ok, 0.5)) : "–";
+  $("sP10").textContent = ok.length ? f(pct(ok, 0.1)) : "–";
+  $("sP90").textContent = ok.length ? f(pct(ok, 0.9)) : "–";
+  $("sMean").textContent = ok.length ? f(ok.reduce((a, b) => a + b, 0) / ok.length) : "–";
+  $("sExt").textContent = (100 * (1 - ok.length / S.n)).toFixed(1) + "%";
+  const pc = (k, s) => (100 * k / s.n).toFixed(1) + "%";
+  const failTxt = s => `${pc(s.ext, s)} lost every breeding sow, ${pc(s.boar, s)} lost every boar` +
+    (s.plat ? `, ${pc(s.plat, s)} levelled off below N for lack of space` : "") + (s.hor ? `, ${pc(s.hor, s)} still short after ${f(H)} days` : "");
+  const band = s => s.ok.length ? `${f(pct(s.ok, 0.1))}–${f(pct(s.ok, 0.9))}` : "–";
+  $("mcnote").textContent = `${done.toLocaleString()} of ${totalRuns.toLocaleString()} runs in ${secsTxt(secs)}` + reduced +
+    (mc.running ? " (still running)" : "") + ". " +
+    (U ? `Stats above include input uncertainty (±${Math.round(u * 100)}%). 80% range: luck only ${band(L)} days; with input uncertainty ${band(U)} days. ` +
+      `Failed runs, luck only: ${failTxt(L)}; with uncertainty: ${failTxt(U)}. ` : `Failed runs: ${failTxt(L)}. `) +
+    `Percentiles and mean use only runs that reached N. Average model: ${det.hit !== null ? f(det.hit) + " days" : "never"}. ` +
+    `Changing inputs doesn't rerun this; press Run again.`;
+  const c = cssVars();
+  $("histlegend").innerHTML = U
+    ? `<span><span class="sw" style="background:${c.acc}"></span>luck + input uncertainty</span><span><span class="sw" style="border:2px solid ${c.text}"></span>luck only</span>`
+    : `<span><span class="sw" style="background:${c.acc}"></span>luck only</span>`;
+  drawHist(S.ok, U ? L.ok : null, det.hit);
+  if (ok.length && (!mc.conv.length || mc.conv[mc.conv.length - 1].n !== S.n))
+    mc.conv.push({ n: S.n, med: pct(ok, 0.5), p10: pct(ok, 0.1), p90: pct(ok, 0.9) });
+  drawCdf(L, U, det.hit); drawConv();
+  if (!mc.running || performance.now() - (mc.lastTraj || 0) > 3000) { mc.lastTraj = performance.now(); drawTimeCharts(); }
+}
+
+function drawHist(vals, outline, detDay) {
+  const { ctx, W, H } = setup($("hist")), c = cssVars();
+  if (!vals.length && !(outline && outline.length)) return;
+  const padL = 40, padR = 10, padT = 16, padB = 26;
+  // vals and outline arrive sorted; use the 0.1–99.9 percentiles so a few extreme runs don't squash the plot
+  const ends = a => a && a.length ? [pct(a, 0.001), pct(a, 0.999)] : [Infinity, -Infinity];
+  const [l1, h1] = ends(vals), [l2, h2] = ends(outline);
+  let lo = Math.min(l1, l2), hi = Math.max(h1, h2);
+  if (detDay !== null) { lo = Math.min(lo, detDay); hi = Math.max(hi, detDay); }
+  if (hi - lo < 10) { lo -= 5; hi += 5; }
+  const nb = Math.min(50, Math.max(10, Math.round(Math.sqrt(vals.length + (outline ? outline.length : 0)))));
+  const bw = (hi - lo) / nb;
+  const binsOf = arr => { const b = new Array(nb).fill(0); for (const v of arr) b[Math.min(nb - 1, Math.max(0, Math.floor((v - lo) / bw)))]++; return b; };
+  // show both sets as shares of their runs, so sets of different sizes compare fairly
+  const norm = (b, n) => b.map(x => x / Math.max(1, n));
+  const bins = norm(binsOf(vals), vals.length), obins = outline ? norm(binsOf(outline), outline.length) : null;
+  const ymax = Math.max(1e-9, ...bins, ...(obins || []));
+  const X = v => padL + (W - padL - padR) * (v - lo) / (hi - lo);
+  const Y = n => padT + (H - padT - padB) * (1 - n / ymax);
+  ctx.strokeStyle = c.line; ctx.fillStyle = c.ink; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const n = ymax * i / 4, y = Y(n);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.textAlign = "right"; ctx.fillText((100 * n).toFixed(n * 100 < 10 ? 1 : 0) + "%", padL - 6, y + 4);
+  }
+  ctx.fillStyle = c.acc;
+  bins.forEach((n, i) => { const x0 = X(lo + i * bw) + 1, x1 = X(lo + (i + 1) * bw) - 1; ctx.fillRect(x0, Y(n), Math.max(1, x1 - x0), H - padB - Y(n)); });
+  if (obins) {
+    ctx.strokeStyle = c.text; ctx.lineWidth = 1.5; ctx.beginPath();
+    obins.forEach((n, i) => { const x0 = X(lo + i * bw), x1 = X(lo + (i + 1) * bw); i ? ctx.lineTo(x0, Y(n)) : ctx.moveTo(x0, Y(n)); ctx.lineTo(x1, Y(n)); });
+    ctx.stroke();
+  }
+  ctx.fillStyle = c.ink; ctx.textAlign = "center";
+  for (let i = 0; i <= 5; i++) { const v = lo + (hi - lo) * i / 5; ctx.fillText(Math.round(v) + "d", X(v), H - 8); }
+  const mark = (v, color, label, dy) => {
+    ctx.strokeStyle = color; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(X(v), padT - 4); ctx.lineTo(X(v), H - padB); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = color; ctx.textAlign = X(v) > W - 90 ? "right" : "left";
+    ctx.fillText(label, X(v) + (ctx.textAlign === "left" ? 4 : -4), padT + dy);
+  };
+  if (vals.length) mark(pct(vals, 0.5), c.ink, "median", 4);
+  if (detDay !== null) mark(detDay, c.acc2, "average model", 18);
+}
+
+// ---- Self-checks: known results the model must keep reproducing ----
+function selfChecks() {
+  const base = { split: "half", n: 2, N: 1000, a0: 180, g: 68, I: 68, L: 3, rho1: 1, f: 0.5, M: 28, R: 0, mort: "flat", m: 0, hb: 0,
+    s: 1, w: 0, d: 0, old: "off", B: 0, area: 0, space: 0.3, cost: 30, ms: 1 };
+  const oldReal = { ...base, I: 120, M: 82, m: 0.1, s: 0.7, d: 0.05 };
+  const real = { ...base, I: 120, M: 82, R: 900, mort: "life", s: 0.7, w: 0.1, d: 0.05, old: "on", rho1: 0.8, hb: 0.05 };
+  const checks = [];
+  const add = (name, fn) => { try { const [ok, detail] = fn(); checks.push({ name, ok, detail }); } catch (e) { checks.push({ name, ok: false, detail: String(e) }); } };
+  add("Best case, 2 → 1,000 pigs in 588 days (independently verified)", () => { const h = simulate(base).hit; return [h === 588, `got ${h}`]; });
+  add("Best case, 2 → 15,000 pigs in 832 days", () => { const h = simulate({ ...base, N: 15000 }).hit; return [h === 832, `got ${h}`]; });
+  add("Flat 10% mortality, 120-day litters: 1,268 / 1,838 days", () => {
+    const a = simulate(oldReal).hit, b = simulate({ ...oldReal, N: 15000 }).hit; return [a === 1268 && b === 1838, `got ${a} / ${b}`]; });
+  add("Fibonacci case: growth per interval = (1+√7)/2", () => {
+    const q = { ...base, M: 68 }, r = growthRate(q, femTable(q, survTable(q, 30000))).r, lam = Math.exp(r * 68), ex = (1 + Math.sqrt(7)) / 2;
+    return [Math.abs(lam - ex) < 1e-6, `λ = ${lam.toFixed(7)} vs ${ex.toFixed(7)}`]; });
+  add("R₀ matches geometric-series formula (flat mortality)", () => {
+    const q = { ...oldReal }, t = survTable(q, 30000), r = growthRate(q, femTable(q, t));
+    const ex = q.L * q.s * q.f * t[q.M + q.g] / (1 - (1 - q.d) * t[q.I]); return [Math.abs(r.R0 / ex - 1) < 1e-9, `${r.R0.toFixed(6)} vs ${ex.toFixed(6)}`]; });
+  add("Euler–Lotka r matches simulated long-run growth", () => {
+    const q = { ...real, n: 40, N: 1e12 }, s = simulate(q), R = s.rows, a = R[R.length - 2], z = R[R.length - 12];
+    const sim = Math.log(a.total / z.total) / (a.day - z.day); return [Math.abs(sim / s.r - 1) < 1e-3, `r = ${s.r.toFixed(6)}, simulated ${sim.toFixed(6)}`]; });
+  add("Space limit: realistic herd levels off at or below capacity", () => {
+    const q = { ...real, n: 10, N: 1e9, area: 150 }, s = simulate(q), K = 150 / 0.3;
+    return [s.maxTotal <= K * 1.0001 && s.maxTotal > 0.8 * K, `peak ${s.maxTotal.toFixed(1)} vs capacity ${K}`]; });
+  add("Inbreeding load slows a 2-pig herd", () => {
+    const a = simulate({ ...real, B: 0 }).hit, b = simulate({ ...real, B: 3.1 }).hit;
+    return [b > a, `no load ${a} days, with load ${b} days`]; });
+  add("R₀ with extra breeding-sow deaths matches its geometric series", () => {
+    const q = { ...oldReal, hb: 0.2 }, t = survTable(q, 30000), r = growthRate(q, femTable(q, t)), A = q.M + q.g;
+    const lfA = t[A] * Math.pow(1 - q.hb, (A - q.M) / 365), step = t[q.I] * Math.pow(1 - q.hb, q.I / 365);
+    const ex = q.L * q.s * q.f * lfA / (1 - (1 - q.d) * step);
+    return [Math.abs(r.R0 / ex - 1) < 1e-9, `${r.R0.toFixed(6)} vs ${ex.toFixed(6)}`]; });
+  add("Young founders (30 days old): first births wait for breeding age and a fertile boar", () => {
+    const q = { ...real, a0: 30, N: 3 }, h = simulate(q).hit, ex = q.g + Math.max(q.M - 30, BOAR_MATURITY - 30);
+    return [h === ex, `herd first grows on day ${h}; expected ${ex}`]; });
+  add("Crowded herd reproduces the value validated against the Monte Carlo (441.9 pigs at day 1,560)", () => {
+    const q = { ...real, n: 40, area: 150, N: 1e15, B: 3.1 }, row = simulate(q).rows.find(x => x.day >= 1560);
+    return [row && row.day === 1560 && Math.abs(row.total - 441.9) < 0.1, `got ${row ? row.total.toFixed(1) : "none"} at day ${row ? row.day : "–"}`]; });
+  const passed = checks.filter(c => c.ok).length;
+  $("checks").querySelector("summary").innerHTML =
+    `Self-checks: <span class="${passed === checks.length ? "pass" : "fail"}">${passed}/${checks.length} passed</span>`;
+  $("checklist").innerHTML = checks.map(c => `<li><span class="${c.ok ? "pass" : "fail"}">${c.ok ? "✓" : "✗"}</span> ${c.name} <small>(${c.detail})</small></li>`).join("");
+  if (passed < checks.length) $("checks").open = true;
+}
+
+// A sow with her litter next to the headline; the number of pups follows the litter-size assumption.
+function drawFamily(p) {
+  const k = Math.max(1, Math.min(8, Math.round(p.L))), coats = ["pig2", "pig3", "pigshape"];
+  const span = 190, w = 66, step = k > 1 ? Math.min(58, (span - w) / (k - 1)) : 0;
+  let pups = "";
+  const order = [...Array(k).keys()].sort((a, b) => (a % 2) - (b % 2));   // back row first
+  for (const i of order) {
+    const x = 2 + i * step, y = i % 2 ? 96 : 86;
+    pups += `<use href="#${coats[i % 3]}" x="${x.toFixed(1)}" y="${y}" width="${w}" height="46"/>`;
+  }
+  const hay = [24, 70, 118, 166, 212, 258, 300].map((x, i) =>
+    `<path d="M${x} 142 q4 -9 ${i % 2 ? 9 : -6} -13 M${x + 5} 142 q1 -8 ${i % 2 ? -5 : 8} -11" stroke="#e9c46a" stroke-width="2" fill="none" stroke-linecap="round"/>`).join("");   // hay stays hay-coloured
+  $("family").innerHTML = `${hay}<use href="#pigshape" x="150" y="30" width="166" height="116"/>${pups}`;
+  $("family").setAttribute("aria-label", `A sow with a litter of ${k} pup${k > 1 ? "s" : ""}`);
+}
+
+bio.forEach(id => $(id).addEventListener(selects.includes(id) ? "change" : "input", run));
+for (const id of ["n", "N"]) $(id).addEventListener("input", () => { fitInline($(id)); run(); });
+$("split").addEventListener("change", run);
+window.addEventListener("resize", () => { run(); showMC(); drawFounders(); });
+fitInline($("n")); fitInline($("N"));
+// Brand: the vape bar runs the title's full width, with the LED under the end of its widest line.
+function sizeVape() {
+  const ans = document.querySelector(".answer"), r = document.createRange(); r.selectNodeContents(ans);
+  const left = ans.getBoundingClientRect().left;
+  const right = Math.max(...[...r.getClientRects()].map(x => x.right), ...[...ans.querySelectorAll("input")].map(i => i.getBoundingClientRect().right));
+  document.querySelector(".vape").style.width = Math.max(48, Math.round(right - left)) + "px";
+}
+new ResizeObserver(sizeVape).observe(document.querySelector(".answer"));
+new MutationObserver(sizeVape).observe($("hWhen"), { childList: true, characterData: true, subtree: true });
+for (const id of ["n", "N"]) $(id).addEventListener("input", () => requestAnimationFrame(sizeVape));
+if (document.fonts) document.fonts.ready.then(sizeVape);
+// Night (default) and Paper themes from the brand kit.
+$("themeBtn").onclick = () => {
+  const paper = document.documentElement.dataset.theme !== "paper";
+  document.documentElement.dataset.theme = paper ? "paper" : "night";
+  $("themeBtn").textContent = paper ? "Night" : "Paper";
+  $("themeBtn").setAttribute("aria-label", `Switch to the ${paper ? "night" : "paper"} theme`);
+  run(); showMC(); drawFounders();
+};
+// On narrow screens, start with the assumption groups folded so the results are close to the top.
+if (matchMedia("(max-width: 959px)").matches) document.querySelectorAll(".grp").forEach(d => d.open = false);
+resetRealistic();   // start from the realistic assumptions
+setTimeout(selfChecks, 50);
+</script>
+</body>
+</html>
