@@ -1,0 +1,27 @@
+Guinea pig herd calculator
+Copyright (c) 2026 Justin Alick
+
+The MIT License in LICENSE applies to the source code, model, and
+documentation in this repository.
+
+It does NOT apply to the following "Brand Assets", which are excluded and for
+which all rights are reserved:
+
+  1. The name "Justin Alick" and the handle "@justinalick".
+  2. The CryptoPunk image embedded in index.html (a data: URI PNG in the page
+     byline). The CryptoPunks artwork is subject to the rights of its IP
+     holder and is used here under the holder's license. No rights in it are
+     granted by this repository.
+  3. The @justinalick visual identity as applied in index.html, including the
+     byline, the "vape" title bar, the framed layout, and the LED signal
+     convention.
+
+If you copy, fork, or redistribute this project, you must remove or replace
+the Brand Assets and must not present your version as made or endorsed by
+Justin Alick. Attribution in the form "Based on work by Justin Alick" is
+welcome.
+
+Third-party libraries (KaTeX, Plotly) and fonts (IBM Plex, Silkscreen) are
+loaded from public CDNs at runtime and remain under their own licenses.
+Cited research (Mata, PeerJ 2025; Rowlands 1949; Ralls, Ballou & Templeton
+1988; PMC10000240) belongs to its respective authors.

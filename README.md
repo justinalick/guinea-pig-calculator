@@ -23,3 +23,7 @@ Mata, PeerJ 2025; Rowlands, J. Hygiene 1949; Ralls, Ballou & Templeton, Conserva
 Model output is an estimate, not a breeding plan.
 
 By [@justinalick](https://x.com/justinalick).
+
+## License
+
+Code: [MIT](LICENSE). Branding (name, @justinalick handle, CryptoPunk image, visual identity) is excluded and all rights are reserved; see [NOTICE](NOTICE). Forks must remove it.
