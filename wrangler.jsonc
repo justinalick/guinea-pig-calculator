@@ -1,0 +1,24 @@
+// Static-assets Worker for justinalick.com/projects/guinea-pig-calculator.
+// The route outranks the main site's custom domain on that path only.
+{
+  "$schema": "https://unpkg.com/wrangler@4/config-schema.json",
+  "name": "guinea-pig-calculator",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+  "routes": [
+    { "pattern": "justinalick.com/projects/guinea-pig-calculator*", "zone_name": "justinalick.com" }
+  ],
+  // No request logs or traces; the site's privacy policy promises none are kept.
+  "observability": {
+    "enabled": false,
+    "logs": { "enabled": false, "invocation_logs": false },
+    "traces": { "enabled": false }
+  },
+  // Served only on justinalick.com.
+  "workers_dev": false,
+  "preview_urls": false
+}
