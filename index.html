@@ -231,6 +231,8 @@
   :focus-visible { outline-color: var(--signal); }
   /* Footer: one mono source line, bottom-left. */
   .source { font-size: 12px; color: var(--muted); margin: 36px 0 0; padding-top: 12px; border-top: 1px solid var(--axis); }
+  .source.repo { margin-top: 6px; padding-top: 0; border-top: 0; }
+  .source a { color: inherit; text-underline-offset: 2px; }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
@@ -706,6 +708,7 @@
     </div>
   </div>
   <p class="source">Sources: Mata, PeerJ 2025 (UK pet guinea pig lifetable); Rowlands, J. Hygiene 1949 (litter size by parity); Ralls, Ballou &amp; Templeton, Conservation Biology 1988 (inbreeding); lab colony study, PMC10000240 (pup survival).</p>
+  <p class="source repo">Code: <a href="https://github.com/justinalick/guinea-pig-calculator">github.com/justinalick/guinea-pig-calculator</a> (MIT). Name, handle, punk and visual identity excluded, all rights reserved; see NOTICE.</p>
 </main>
 
 <script id="sim">
